@@ -10,7 +10,9 @@ export const env = createEnv({
       NODE_ENV: z.enum(["development", "test", "production"]),
       SUPABASE_ANON_KEY: z.string().min(1),
       SUPABASE_URL: z.string().url(),
-      SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional()
+      SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+      BETTER_AUTH_SECRET: z.string().min(32),
+      POSTGRES_URL: z.string().min(1),
   },
 
   /**
@@ -30,7 +32,9 @@ export const env = createEnv({
       NODE_ENV: process.env.NODE_ENV,
       SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
       SUPABASE_URL: process.env.SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+      POSTGRES_URL: process.env.POSTGRES_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
