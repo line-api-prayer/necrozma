@@ -1,19 +1,12 @@
 import Link from "next/link";
-import {supabaseClient} from '../server/db/supabase'
 
 import { LatestPost } from "~/app/_components/post";
 import { api, HydrateClient } from "~/trpc/server";
 import styles from "./index.module.css";
 
-async function Notes() {
-    const supabase = await supabaseClient();
-    const { data: notes } = await supabase.from("notes").select();
-
-    return <pre>{JSON.stringify(notes, null, 2)}</pre>;
-}
-
 export default async function Home() {
   const hello = await api.post.hello({ text: "from tRPC" });
+  const notes = await api.notes.getAll();
 
   void api.post.getLatest.prefetch();
 
@@ -42,7 +35,9 @@ export default async function Home() {
               target="_blank"
             >
               <h3 className={styles.cardTitle}>Documentation →</h3>
-                <Notes />
+              <pre className={styles.cardText}>
+                {JSON.stringify(notes, null, 2)}
+              </pre>
             </Link>
           </div>
           <div className={styles.showcaseContainer}>
