@@ -16,10 +16,6 @@ export const env = createEnv({
       POSTGRES_URL_NON_POOLING: z.string().min(1),
       POSTGRES_USER: z.string().min(1),
       SUPABASE_ANON_KEY: z.string().min(1),
-      SUPABASE_JWT_SECRET: z.string().min(1),
-      SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
-      SUPABASE_SECRET_KEY: z.string().min(1),
-      SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
       SUPABASE_URL: z.string().url()
   },
 
@@ -46,10 +42,6 @@ export const env = createEnv({
       POSTGRES_URL_NON_POOLING: process.env.POSTGRES_URL_NON_POOLING,
       POSTGRES_USER: process.env.POSTGRES_USER,
       SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
-      SUPABASE_JWT_SECRET: process.env.SUPABASE_JWT_SECRET,
-      SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY,
-      SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
       SUPABASE_URL: process.env.SUPABASE_URL
   },
   /**
