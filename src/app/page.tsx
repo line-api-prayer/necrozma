@@ -1,8 +1,16 @@
 import Link from "next/link";
+import {supabaseClient} from '../server/db/supabase'
 
 import { LatestPost } from "~/app/_components/post";
 import { api, HydrateClient } from "~/trpc/server";
 import styles from "./index.module.css";
+
+async function Notes() {
+    const supabase = await supabaseClient();
+    const { data: notes } = await supabase.from("notes").select();
+
+    return <pre>{JSON.stringify(notes, null, 2)}</pre>;
+}
 
 export default async function Home() {
   const hello = await api.post.hello({ text: "from tRPC" });
@@ -34,10 +42,7 @@ export default async function Home() {
               target="_blank"
             >
               <h3 className={styles.cardTitle}>Documentation →</h3>
-              <div className={styles.cardText}>
-                Learn more about Create T3 App, the libraries it uses, and how
-                to deploy it.
-              </div>
+                <Notes />
             </Link>
           </div>
           <div className={styles.showcaseContainer}>
