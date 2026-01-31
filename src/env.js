@@ -7,7 +7,9 @@ export const env = createEnv({
    * isn't built with invalid env vars.
    */
   server: {
-    NODE_ENV: z.enum(["development", "test", "production"]),
+      NODE_ENV: z.enum(["development", "test", "production"]),
+      SUPABASE_ANON_KEY: z.string().min(1),
+      SUPABASE_URL: z.string().url()
   },
 
   /**
@@ -24,8 +26,9 @@ export const env = createEnv({
    * middlewares) or client-side so we need to destruct manually.
    */
   runtimeEnv: {
-    NODE_ENV: process.env.NODE_ENV,
-    // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
+      NODE_ENV: process.env.NODE_ENV,
+      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+      SUPABASE_URL: process.env.SUPABASE_URL
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
