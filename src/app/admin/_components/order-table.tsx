@@ -97,10 +97,15 @@ export function OrderTable({
                   )}
                 </td>
                 <td>
-                  <Badge
-                    status={order.internalStatus}
-                    hasRejection={!!order.rejectionReason}
-                  />
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <Badge
+                      status={order.internalStatus}
+                      hasRejection={!!order.rejectionReason}
+                    />
+                    <Badge
+                      status={order.paymentStatus}
+                    />
+                  </div>
                 </td>
                 <td>
                   <span className={styles.customerName}>

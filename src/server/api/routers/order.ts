@@ -11,6 +11,87 @@ import {
   toOrderItem,
   toEvidence,
 } from "~/server/lib/line/types";
+import { type SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Helper to sync orders from LINE Shop to the Database.
+ * Takes an optional start/end date range to optimize API calls, otherwise fetches recent finalized.
+ */
+async function syncOrdersFromLine(supabase: SupabaseClient, fromDate?: string) {
+  let page = 1;
+  let synced = 0;
+
+  while (true) {
+    const response = await listOrders({
+      status: ["FINALIZED", "COMPLETED", "EXPIRED", "CANCELED"],
+      page,
+      perPage: 50,
+      includeItems: true,
+    });
+
+    for (const lineOrder of response.orders) {
+      const orderDate = lineOrder.checkoutAt
+        ? new Date(lineOrder.checkoutAt).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0];
+
+      // If we are filtering by a specific date, skip orders that don't match
+      if (fromDate && orderDate !== fromDate) continue;
+
+      const { data: upsertedOrder, error: orderError } = await supabase
+        .from("orders")
+        .upsert(
+          {
+            line_order_no: lineOrder.orderNo,
+            line_status: lineOrder.status,
+            payment_status: lineOrder.paymentStatus,
+            payment_method: lineOrder.paymentMethod,
+            customer_name: lineOrder.customerName,
+            order_date: orderDate,
+            checkout_at: lineOrder.checkoutAt,
+            subtotal_price: lineOrder.subtotalPrice,
+            shipment_price: lineOrder.shipmentPrice,
+            discount_amount: lineOrder.discountAmount,
+            total_price: lineOrder.totalPrice,
+            remark_buyer: lineOrder.remarkBuyer,
+            synced_at: new Date().toISOString(),
+          },
+          { onConflict: "line_order_no" },
+        )
+        .select("id")
+        .single();
+
+      if (orderError || !upsertedOrder) {
+        console.error(`Failed to upsert order ${lineOrder.orderNo}:`, orderError);
+        continue;
+      }
+
+      const orderId = upsertedOrder.id as string;
+      await supabase.from("order_items").delete().eq("order_id", orderId);
+
+      if (lineOrder.items.length > 0) {
+        const itemRows = lineOrder.items.map((item) => ({
+          order_id: orderId,
+          sku: item.sku,
+          barcode: item.barcode,
+          name: item.name,
+          price: item.price,
+          discounted_price: item.discountedPrice,
+          quantity: item.quantity,
+          image_url: item.imageUrl,
+          variants: item.variants,
+        }));
+        await supabase.from("order_items").insert(itemRows);
+      }
+
+      synced++;
+    }
+
+    if (!response.hasMore) break;
+    page++;
+  }
+
+  return synced;
+}
 
 export const orderRouter = createTRPCRouter({
   list: staffProcedure
@@ -23,6 +104,17 @@ export const orderRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       const supabase = await supabaseClient();
+
+      // Whenever a specific date is requested, automatically sync from LINE MyShop first 
+      // (this replaces the need for clicking "Sync" manually every time).
+      if (input.date) {
+        try {
+          await syncOrdersFromLine(supabase, input.date);
+        } catch (error) {
+          console.error(`Auto-sync failed for date ${input.date}:`, error);
+        }
+      }
+
       let query = supabase
         .from("orders")
         .select("*")
@@ -91,80 +183,9 @@ export const orderRouter = createTRPCRouter({
     }),
 
   syncFromLine: adminProcedure.mutation(async () => {
+    // Manual trigger synced all recent orders
     const supabase = await supabaseClient();
-    let page = 1;
-    let synced = 0;
-
-    while (true) {
-      const response = await listOrders({
-        status: "FINALIZED",
-        page,
-        perPage: 50,
-      });
-
-      for (const lineOrder of response.orders) {
-        // Only sync paid orders
-        if (lineOrder.paymentStatus !== "PAID") continue;
-
-        const orderDate = lineOrder.checkoutAt
-          ? new Date(lineOrder.checkoutAt).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0];
-
-        // Upsert the order
-        const { data: upsertedOrder, error: orderError } = await supabase
-          .from("orders")
-          .upsert(
-            {
-              line_order_no: lineOrder.orderNo,
-              line_status: lineOrder.status,
-              payment_status: lineOrder.paymentStatus,
-              payment_method: lineOrder.paymentMethod,
-              customer_name: lineOrder.customerName,
-              order_date: orderDate,
-              checkout_at: lineOrder.checkoutAt,
-              subtotal_price: lineOrder.subtotalPrice,
-              shipment_price: lineOrder.shipmentPrice,
-              discount_amount: lineOrder.discountAmount,
-              total_price: lineOrder.totalPrice,
-              remark_buyer: lineOrder.remarkBuyer,
-              synced_at: new Date().toISOString(),
-            },
-            { onConflict: "line_order_no" },
-          )
-          .select("id")
-          .single();
-
-        if (orderError) {
-          console.error(`Failed to upsert order ${lineOrder.orderNo}:`, orderError);
-          continue;
-        }
-
-        // Upsert items — delete old items and insert fresh
-        const orderId = upsertedOrder.id as string;
-        await supabase.from("order_items").delete().eq("order_id", orderId);
-
-        if (lineOrder.items.length > 0) {
-          const itemRows = lineOrder.items.map((item) => ({
-            order_id: orderId,
-            sku: item.sku,
-            barcode: item.barcode,
-            name: item.name,
-            price: item.price,
-            discounted_price: item.discountedPrice,
-            quantity: item.quantity,
-            image_url: item.imageUrl,
-            variants: item.variants,
-          }));
-          await supabase.from("order_items").insert(itemRows);
-        }
-
-        synced++;
-      }
-
-      if (!response.hasMore) break;
-      page++;
-    }
-
+    const synced = await syncOrdersFromLine(supabase);
     return { synced };
   }),
 
@@ -172,6 +193,14 @@ export const orderRouter = createTRPCRouter({
     .input(z.object({ date: z.string() }))
     .query(async ({ input }): Promise<DailySummary> => {
       const supabase = await supabaseClient();
+
+      // Whenever summary is requested, verify if it was synced yet today
+      try {
+        await syncOrdersFromLine(supabase, input.date);
+      } catch (error) {
+        console.error(`Auto-sync failed during daily summary for date ${input.date}:`, error);
+      }
+
       const { data, error } = await supabase
         .from("orders")
         .select("internal_status, total_price")

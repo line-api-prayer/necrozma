@@ -5,7 +5,7 @@ import {
   type LineShopListResponse,
 } from "./types";
 
-const BASE_URL = "https://api-gateway-long.line-apps.com/myshop/v1";
+const BASE_URL = "https://developers-oaplus.line.biz/myshop/v1";
 
 async function lineShopFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
@@ -38,31 +38,39 @@ interface RawOrderItem {
   barcode?: string;
   name: string;
   price: number;
-  discounted_price?: number;
+  discountedPrice?: number;
   quantity: number;
-  image_url?: string;
-  variants?: Record<string, string>;
+  imageURL?: string;
+  productId?: number;
+  variantId?: number;
+  weight?: number;
 }
 
 interface RawOrder {
-  order_no: string;
-  status: string;
-  payment_status: string;
-  payment_method: string;
-  customer_name: string;
-  checkout_at: string;
-  subtotal_price: number;
-  shipment_price: number;
-  discount_amount: number;
-  total_price: number;
-  remark_buyer?: string;
-  items: RawOrderItem[];
+  orderNumber: string;
+  orderStatus: string;
+  paymentStatus: string;
+  paymentMethod: string;
+  customer_name?: string; // The list API might not even return this reliably, we'll map below
+  shippingAddress?: {
+    recipientName?: string;
+    [key: string]: any;
+  };
+  checkoutAt: string;
+  subtotalPrice: number;
+  shipmentPrice: number;
+  discountAmount: number;
+  totalPrice: number;
+  remarkBuyer?: string;
+  orderItems?: RawOrderItem[];
 }
 
 interface RawListResponse {
-  orders: RawOrder[];
-  total_count: number;
-  has_more: boolean;
+  data: RawOrder[];
+  totalRow: number;
+  totalPage: number;
+  currentPage: number;
+  perPage: number;
 }
 
 // ─── Converters ─────────────────────────────────────────────────────────────
@@ -73,50 +81,81 @@ function toOrderItem(raw: RawOrderItem): LineShopOrderItem {
     barcode: raw.barcode ?? null,
     name: raw.name,
     price: raw.price,
-    discountedPrice: raw.discounted_price ?? null,
+    discountedPrice: raw.discountedPrice ?? null,
     quantity: raw.quantity,
-    imageUrl: raw.image_url ?? null,
-    variants: raw.variants ?? null,
+    imageUrl: raw.imageURL ?? null,
+    variants: raw.variantId ? { id: String(raw.variantId) } : null,
   };
 }
 
 function toOrder(raw: RawOrder): LineShopOrder {
+  // Map fields according to actual LINE API docs
   return {
-    orderNo: raw.order_no,
-    status: raw.status as LineShopOrder["status"],
-    paymentStatus: raw.payment_status,
-    paymentMethod: raw.payment_method,
-    customerName: raw.customer_name,
-    checkoutAt: raw.checkout_at,
-    subtotalPrice: raw.subtotal_price,
-    shipmentPrice: raw.shipment_price,
-    discountAmount: raw.discount_amount,
-    totalPrice: raw.total_price,
-    remarkBuyer: raw.remark_buyer ?? null,
-    items: raw.items.map(toOrderItem),
+    orderNo: raw.orderNumber, 
+    status: raw.orderStatus as LineShopOrder["status"],
+    paymentStatus: raw.paymentStatus,
+    paymentMethod: raw.paymentMethod,
+    // The individual order API returns shippingAddress.recipientName, use that if customer_name isn't present
+    customerName: raw.customer_name || raw.shippingAddress?.recipientName || "Unknown", 
+    checkoutAt: raw.checkoutAt,
+    subtotalPrice: raw.subtotalPrice ?? 0,
+    shipmentPrice: raw.shipmentPrice ?? 0,
+    discountAmount: raw.discountAmount ?? 0,
+    totalPrice: raw.totalPrice ?? 0,
+    remarkBuyer: raw.remarkBuyer ?? null,
+    items: (raw.orderItems ?? []).map(toOrderItem),
   };
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export async function listOrders(params?: {
-  status?: string;
+  status?: string | string[];
   page?: number;
   perPage?: number;
+  includeItems?: boolean;
 }): Promise<LineShopListResponse> {
   const searchParams = new URLSearchParams();
-  if (params?.status) searchParams.set("status", params.status);
+  
+  if (params?.status) {
+    if (Array.isArray(params.status)) {
+      params.status.forEach(status => searchParams.append("orderStatus", status));
+    } else {
+      searchParams.append("orderStatus", params.status);
+    }
+  }
+  
   if (params?.page) searchParams.set("page", String(params.page));
-  if (params?.perPage) searchParams.set("per_page", String(params.perPage));
+  if (params?.perPage) searchParams.set("perPage", String(params.perPage));
 
   const qs = searchParams.toString();
   const path = `/orders${qs ? `?${qs}` : ""}`;
   const raw = await lineShopFetch<RawListResponse>(path);
 
+  let orders = (raw.data ?? []).map(toOrder);
+
+  // The /orders list endpoint does not include orderItems.
+  // If we need them, we have to fetch each order individually.
+  if (params?.includeItems && orders.length > 0) {
+    orders = await Promise.all(
+      orders.map(async (order) => {
+        try {
+          const detailedOrder = await getOrder(order.orderNo);
+          return detailedOrder;
+        } catch (error) {
+          console.error(`Failed to fetch details for order ${order.orderNo}`, error);
+          return order;
+        }
+      })
+    );
+  }
+
+  const hasMore = raw.currentPage < raw.totalPage;
+
   return {
-    orders: raw.orders.map(toOrder),
-    totalCount: raw.total_count,
-    hasMore: raw.has_more,
+    orders,
+    totalCount: raw.totalRow ?? 0,
+    hasMore,
   };
 }
 
