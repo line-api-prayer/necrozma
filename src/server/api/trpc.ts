@@ -6,9 +6,11 @@
  * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
  * need to use are documented accordingly near the end.
  */
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
+
+import { auth } from "~/server/lib/auth";
 
 /**
  * 1. CONTEXT
@@ -23,8 +25,13 @@ import { ZodError } from "zod";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
+  const session = await auth.api.getSession({
+    headers: opts.headers,
+  });
+
   return {
     ...opts,
+    session,
   };
 };
 
@@ -72,15 +79,11 @@ export const createTRPCRouter = t.router;
 
 /**
  * Middleware for timing procedure execution and adding an artificial delay in development.
- *
- * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
- * network latency that would occur in production but not in local development.
  */
 const timingMiddleware = t.middleware(async ({ next, path }) => {
   const start = Date.now();
 
   if (t._config.isDev) {
-    // artificial delay in dev
     const waitMs = Math.floor(Math.random() * 400) + 100;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
@@ -95,9 +98,75 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 
 /**
  * Public (unauthenticated) procedure
- *
- * This is the base piece you use to build new queries and mutations on your tRPC API. It does not
- * guarantee that a user querying is authorized, but you can still access user session data if they
- * are logged in.
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
+
+/**
+ * Auth middleware — enforces a valid session.
+ */
+const authMiddleware = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      session: ctx.session,
+      user: ctx.session.user,
+    },
+  });
+});
+
+/**
+ * Protected procedure — requires a logged-in user.
+ */
+export const protectedProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(authMiddleware);
+
+/**
+ * Admin middleware — requires role === "admin".
+ */
+const adminMiddleware = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  if (ctx.session.user.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+  }
+  return next({
+    ctx: {
+      session: ctx.session,
+      user: ctx.session.user,
+    },
+  });
+});
+
+/**
+ * Admin procedure — requires admin role.
+ */
+export const adminProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(adminMiddleware);
+
+/**
+ * Staff middleware — requires role === "admin" or "user" (staff).
+ * Staff can do their own work; admins can also access staff endpoints.
+ */
+const staffMiddleware = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      session: ctx.session,
+      user: ctx.session.user,
+    },
+  });
+});
+
+/**
+ * Staff procedure — requires any authenticated user (staff or admin).
+ */
+export const staffProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(staffMiddleware);

@@ -1,0 +1,199 @@
+.section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.searchInput {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  min-width: 200px;
+  background: white;
+  color: #374151;
+}
+
+.searchInput::placeholder {
+  color: #9ca3af;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+  text-transform: uppercase;
+}
+
+.table td {
+  padding: 1rem;
+  font-size: 0.875rem;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover {
+  background: #f9fafb;
+}
+
+.orderNo {
+  color: #2563eb;
+  font-weight: 500;
+  display: block;
+}
+
+.refNo {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  display: block;
+  margin-top: 0.25rem;
+  font-family: monospace;
+}
+
+.customerName {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.packageInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.packageCode {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.packageName {
+  font-size: 0.75rem;
+  color: #6b7280;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actionButton {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.reviewButton {
+  composes: actionButton;
+  background: #22c55e;
+  color: white;
+}
+
+.reviewButton:hover {
+  background: #16a34a;
+}
+
+.waitLabel {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.completedLabel {
+  font-size: 0.75rem;
+  color: #15803d;
+}
+
+.empty {
+  padding: 3rem;
+  text-align: center;
+  color: #9ca3af;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.paginationInfo {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.statusFilters {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filterChip {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filterChip:hover {
+  background: #f3f4f6;
+}
+
+.filterChipActive {
+  composes: filterChip;
+  background: #22c55e;
+  color: white;
+  border-color: #22c55e;
+}
+
+@media (max-width: 768px) {
+  .table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+}

@@ -1,12 +1,14 @@
-import { betterAuth } from 'better-auth';
+import { betterAuth } from "better-auth";
+import { admin } from "better-auth/plugins";
 import { Pool } from "pg";
 
 export const auth = betterAuth({
-    secret: process.env.BETTER_AUTH_SECRET,
-    database: new Pool({
-        connectionString: process.env.POSTGRES_URL,
-    }),
-    emailAndPassword: {
-        enabled: true,
-    }
-})
+  secret: process.env.BETTER_AUTH_SECRET,
+  database: new Pool({
+    connectionString: process.env.POSTGRES_URL,
+  }),
+  emailAndPassword: {
+    enabled: true,
+  },
+  plugins: [admin()],
+});

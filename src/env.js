@@ -14,6 +14,11 @@ export const env = createEnv({
       POSTGRES_URL: z.string().min(1),
       BETTER_AUTH_URL: z.string().min(1),
       BETTER_AUTH_SECRET: z.string().min(32),
+      LINE_SHOP_API_KEY: z.string().min(1),
+      LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1),
+      LINE_CHANNEL_SECRET: z.string().min(1),
+      ADMIN_LINE_UID: z.string().min(1),
+      CRON_SECRET: z.string().min(1),
   },
 
   /**
@@ -37,6 +42,11 @@ export const env = createEnv({
       POSTGRES_URL: process.env.POSTGRES_URL,
       BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
       BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+      LINE_SHOP_API_KEY: process.env.LINE_SHOP_API_KEY,
+      LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+      LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET,
+      ADMIN_LINE_UID: process.env.ADMIN_LINE_UID,
+      CRON_SECRET: process.env.CRON_SECRET,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
