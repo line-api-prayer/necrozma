@@ -20,7 +20,8 @@ async function lineShopFetch<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch (err) {
     const cause = err instanceof Error ? (err.cause ?? err.message) : String(err);
-    throw new Error(`LINE Shop API unreachable (${path}): ${cause}`);
+    const causeStr = typeof cause === "string" ? cause : JSON.stringify(cause);
+    throw new Error(`LINE Shop API unreachable (${path}): ${causeStr}`);
   }
 
   if (!res.ok) {
@@ -54,7 +55,7 @@ interface RawOrder {
   customer_name?: string; // The list API might not even return this reliably, we'll map below
   shippingAddress?: {
     recipientName?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   checkoutAt: string;
   subtotalPrice: number;
@@ -96,7 +97,7 @@ function toOrder(raw: RawOrder): LineShopOrder {
     paymentStatus: raw.paymentStatus,
     paymentMethod: raw.paymentMethod,
     // The individual order API returns shippingAddress.recipientName, use that if customer_name isn't present
-    customerName: raw.customer_name || raw.shippingAddress?.recipientName || "Unknown", 
+    customerName: raw.customer_name ?? raw.shippingAddress?.recipientName ?? "Unknown", 
     checkoutAt: raw.checkoutAt,
     subtotalPrice: raw.subtotalPrice ?? 0,
     shipmentPrice: raw.shipmentPrice ?? 0,

@@ -20,8 +20,8 @@ export const auth = betterAuth({
   },
   socialProviders: {
     line: {
-      clientId: process.env.LINE_CLIENT_ID as string,
-      clientSecret: process.env.LINE_CLIENT_SECRET as string,
+      clientId: process.env.LINE_CLIENT_ID!,
+      clientSecret: process.env.LINE_CLIENT_SECRET!,
     },
   },
   plugins: [admin()],

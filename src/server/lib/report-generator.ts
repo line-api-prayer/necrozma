@@ -10,16 +10,14 @@ interface ReportData {
 }
 
 export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const PdfPrinter = (
-    require("pdfmake/js/Printer") as {
-      default: new (fonts: Record<string, Record<string, string>>) => {
-        createPdfKitDocument: (
-          docDefinition: Record<string, unknown>,
-        ) => NodeJS.ReadableStream & { end: () => void };
-      };
-    }
-  ).default;
+  // @ts-expect-error - pdfmake/js/Printer lacks a declaration file
+  const { default: PdfPrinter } = (await import("pdfmake/js/Printer")) as unknown as {
+    default: new (fonts: Record<string, Record<string, string>>) => {
+      createPdfKitDocument: (
+        docDefinition: Record<string, unknown>,
+      ) => NodeJS.ReadableStream & { end: () => void };
+    };
+  };
 
   const fonts = {
     Roboto: {
