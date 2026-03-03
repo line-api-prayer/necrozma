@@ -8,14 +8,20 @@ import {
 const BASE_URL = "https://api-gateway-long.line-apps.com/myshop/v1";
 
 async function lineShopFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "X-API-KEY": env.LINE_SHOP_API_KEY,
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        "X-API-KEY": env.LINE_SHOP_API_KEY,
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    const cause = err instanceof Error ? (err.cause ?? err.message) : String(err);
+    throw new Error(`LINE Shop API unreachable (${path}): ${cause}`);
+  }
 
   if (!res.ok) {
     const body = await res.text();

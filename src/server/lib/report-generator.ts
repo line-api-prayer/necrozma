@@ -10,22 +10,24 @@ interface ReportData {
 }
 
 export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
-  // Dynamic import pdfmake's server-side printer
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const PdfPrinter = require("pdfmake/src/printer") as new (
-    fonts: Record<string, Record<string, string>>,
-  ) => {
-    createPdfKitDocument: (
-      docDefinition: Record<string, unknown>,
-    ) => NodeJS.ReadableStream & { end: () => void };
-  };
+  const PdfPrinter = (
+    require("pdfmake/js/Printer") as {
+      default: new (fonts: Record<string, Record<string, string>>) => {
+        createPdfKitDocument: (
+          docDefinition: Record<string, unknown>,
+        ) => NodeJS.ReadableStream & { end: () => void };
+      };
+    }
+  ).default;
 
   const fonts = {
     Roboto: {
-      normal: "node_modules/pdfmake/build/vfs_fonts.js",
-      bold: "node_modules/pdfmake/build/vfs_fonts.js",
-      italics: "node_modules/pdfmake/build/vfs_fonts.js",
-      bolditalics: "node_modules/pdfmake/build/vfs_fonts.js",
+      normal: "node_modules/pdfmake/fonts/Roboto/Roboto-Regular.ttf",
+      bold: "node_modules/pdfmake/fonts/Roboto/Roboto-Medium.ttf",
+      italics: "node_modules/pdfmake/fonts/Roboto/Roboto-Italic.ttf",
+      bolditalics:
+        "node_modules/pdfmake/fonts/Roboto/Roboto-MediumItalic.ttf",
     },
   };
 
