@@ -2,12 +2,10 @@ import { messagingApi } from "@line/bot-sdk";
 import { env } from "~/env.js";
 
 export const client = new messagingApi.MessagingApiClient({
-  channelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelAccessToken: env.LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN,
 });
 
-export const adminClient = new messagingApi.MessagingApiClient({
-  channelAccessToken: process.env.ADMIN_LINE_CHANNEL_ACCESS_TOKEN ?? env.LINE_CHANNEL_ACCESS_TOKEN,
-});
+export const adminClient = client;
 
 export async function sendApprovalNotification(
   lineUid: string,

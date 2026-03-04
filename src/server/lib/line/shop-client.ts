@@ -13,7 +13,7 @@ async function lineShopFetch<T>(path: string, init?: RequestInit): Promise<T> {
     res = await fetch(`${BASE_URL}${path}`, {
       ...init,
       headers: {
-        "X-API-KEY": env.LINE_SHOP_API_KEY,
+        "X-API-KEY": env.OA_PLUS_API_KEY,
         "Content-Type": "application/json",
         ...init?.headers,
       },

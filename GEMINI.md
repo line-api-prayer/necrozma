@@ -67,8 +67,11 @@ Defined and validated in `src/env.js`:
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`: Supabase credentials.
 - `POSTGRES_URL`: Direct DB connection for Better Auth.
 - `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`: Auth configuration.
-- `LINE_CHANNEL_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`: Messaging API credentials.
-- `LINE_SHOP_API_KEY`: MyShop API authentication.
+- `LINE_LOGIN_CHANNEL_ID`, `LINE_LOGIN_CHANNEL_SECRET`: LINE Login credentials.
+- `LINE_ADMIN_BOT_CHANNEL_SECRET`, `LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN`: Messaging API credentials.
+- `OA_PLUS_API_KEY`: MyShop API authentication.
+- `ADMIN_LINE_UID`: LINE user ID for receiving daily reports.
+- `CRON_SECRET`: Security key for cron job endpoints.
 
 ## Development Conventions
 

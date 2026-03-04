@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     // Verify HMAC-SHA256 signature using the precise raw buffer
     const expectedSignature = crypto
-      .createHmac("sha256", env.LINE_CHANNEL_SECRET)
+      .createHmac("sha256", env.LINE_ADMIN_BOT_CHANNEL_SECRET)
       .update(rawBodyBuffer)
       .digest("base64");
 
