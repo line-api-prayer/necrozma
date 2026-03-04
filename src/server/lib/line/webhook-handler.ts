@@ -29,8 +29,9 @@ async function handleMessage(event: WebhookEvent & { type: "message" }) {
     let targetDate: string | undefined = undefined;
     
     // Check if there is a date argument like "สรุปรายวัน 040369"
-    const match = text.match(/สรุปรายวัน\s+(\d{6})/);
-    if (match && match[1]) {
+    const regex = /สรุปรายวัน\s+(\d{6})/;
+    const match = regex.exec(text);
+    if (match?.[1]) {
       const dateStr = match[1];
       const dd = dateStr.slice(0, 2);
       const mm = dateStr.slice(2, 4);
@@ -42,7 +43,7 @@ async function handleMessage(event: WebhookEvent & { type: "message" }) {
       targetDate = `${ceYear}-${mm}-${dd}`;
     }
 
-    console.log(`[LINE Webhook] Generating daily summary for user: ${lineUid}, date: ${targetDate || "today"}`);
+    console.log(`[LINE Webhook] Generating daily summary for user: ${lineUid}, date: ${targetDate ?? "today"}`);
     // Generate and send to the user who requested it. They act as "admin" for themselves.
     await generateAndSendDailySummary(targetDate, lineUid);
   }

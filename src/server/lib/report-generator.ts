@@ -85,7 +85,17 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
   ];
 
   // Group items into columns (max 4 items per column for layout aesthetic)
-  const summaryColumns: any[] = [
+  interface SummaryItem {
+    text: string;
+    color?: string;
+    fontSize?: number;
+    bold?: boolean;
+    margin?: number[];
+  }
+  interface SummaryColumn {
+    stack: SummaryItem[];
+  }
+  const summaryColumns: [SummaryColumn, SummaryColumn] = [
     {
       stack: [
         { text: "วันดำเนินการ", color: "#6b7280", fontSize: 12 },
@@ -102,7 +112,7 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
 
   // Distribute items across the 2 columns evenly
   summaryItems.forEach((item, index) => {
-    const colIndex = index % 2;
+    const colIndex = index % 2 as 0 | 1;
     
     summaryColumns[colIndex].stack.push(
       { text: item.name, color: "#6b7280", fontSize: 12, margin: [0, 10, 0, 0] },

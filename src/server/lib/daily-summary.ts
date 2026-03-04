@@ -19,7 +19,7 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
   const supabase = await supabaseClient();
 
   // Use Thailand timezone for "today" or the provided date
-  const today = targetDateStr || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const today = targetDateStr ?? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
@@ -111,7 +111,7 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
   const nocacheCsvUrl = `${csvUrl.publicUrl}?v=${timestamp}`;
 
   // Send to admin via LINE
-  const adminIdToSend = customAdminUid || env.ADMIN_LINE_UID;
+  const adminIdToSend = customAdminUid ?? env.ADMIN_LINE_UID;
   if (adminIdToSend) {
     try {
       await sendDailySummaryToAdmin(
