@@ -167,9 +167,14 @@ export const reportRouter = createTRPCRouter({
         .getPublicUrl(csvPath);
 
       // Send via LINE to admin
+      const adminUid = env.ADMIN_LINE_UID;
+      if (!adminUid) {
+        throw new Error("ADMIN_LINE_UID is missing from the environment variables");
+      }
+
       const timestamp = Date.now();
       await sendDailySummaryToAdmin(
-        env.ADMIN_LINE_UID,
+        adminUid,
         {
           date: input.date,
           totalOrders: reportData.orders.length,
