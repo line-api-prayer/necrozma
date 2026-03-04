@@ -76,3 +76,11 @@ Defined and validated in `src/env.js`:
 - **Validation:** Always define input schemas using Zod.
 - **LINE Webhooks:** Handle signature verification (see `src/app/api/line/webhook/route.ts`).
 - **Styles:** Use CSS Modules or `styles/globals.css` for consistent UI.
+
+## Lessons Learned & Best Practices
+
+- **Build Hygiene:** Always exclude one-off test scripts (`test-*.ts`) from `tsconfig.json` to prevent build failures due to missing dev dependencies in the production pipeline.
+- **Type-Safe Errors:** Use `unknown` for error variables in `catch` blocks and perform type checks (e.g., `error instanceof Error`) before accessing properties like `message`.
+- **Nullish Coalescing:** Favor `??` over `||` for default values to avoid bugs when dealing with empty strings or zero, unless specifically intending to catch all falsy values.
+- **Fixed-Size Arrays:** When indexing into an array with a known small number of elements (e.g., index 0 or 1), use TypeScript **Tuple types** (e.g., `[Type, Type]`) to satisfy "possibly undefined" checks.
+- **Regex Hygiene:** Prefer `RegExp#exec()` and optional chaining for complex pattern matching to ensure cleaner and safer code.
