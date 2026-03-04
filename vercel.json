@@ -5,10 +5,6 @@
       "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/cron/evening-message",
-      "schedule": "0 13 * * *"
-    },
-    {
       "path": "/api/cron/sync-orders",
       "schedule": "0 1 * * *"
     }
