@@ -1,8 +1,12 @@
 import { messagingApi } from "@line/bot-sdk";
 import { env } from "~/env.js";
 
-const client = new messagingApi.MessagingApiClient({
+export const client = new messagingApi.MessagingApiClient({
   channelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN,
+});
+
+export const adminClient = new messagingApi.MessagingApiClient({
+  channelAccessToken: process.env.ADMIN_LINE_CHANNEL_ACCESS_TOKEN ?? env.LINE_CHANNEL_ACCESS_TOKEN,
 });
 
 export async function sendApprovalNotification(
@@ -36,16 +40,65 @@ export async function sendRejectionNotification(
 
 export async function sendDailySummaryToAdmin(
   adminLineUid: string,
-  stats: { date: string; totalOrders: number; totalRevenue: number },
+  stats: {
+    date: string;
+    totalOrders: number;
+    totalRevenue: number;
+    items: { name: string; qty: number; total: number }[];
+    orders: string[];
+  },
   pdfUrl: string,
   csvUrl: string,
 ) {
+  const dateStr = new Date(stats.date).toLocaleDateString("th-TH", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+
+  let messageText = `💰 สรุปรายการออเดอร์ ประจำวันที่ ${dateStr}\n`;
+  messageText += `ร้านค้า: ฝากใส่บาตร\n\n`;
+  messageText += `━━━━━━━━━━━━━━\n\n`;
+  
+  messageText += `📊 สรุปวันนี้\n`;
+  messageText += `• จำนวนออเดอร์: ${stats.totalOrders} ออเดอร์\n`;
+  messageText += `• ยอดรวมทั้งหมด: ${stats.totalRevenue.toLocaleString()} บาท\n\n`;
+  messageText += `━━━━━━━━━━━━━━\n\n`;
+
+  messageText += `📦 รายการที่ขายได้\n`;
+  if (stats.items.length > 0) {
+    stats.items.forEach((item) => {
+      // The user's template simplifies names up to the first ' ' if they are long, but to be safe let's just use the item.name
+      // Alternatively, we can just print the exact mapping. The user said: "• ใส่บาตร ชุด S ร่ำรวย 2 ชุด = 198 บาท"
+      messageText += `• ${item.name} ${item.qty} ชุด = ${item.total} บาท\n`;
+    });
+  } else {
+    messageText += `• ไม่มีรายการ\n`;
+  }
+  messageText += `\n━━━━━━━━━━━━━━\n\n`;
+
+  messageText += `🧾 Order ID\n`;
+  if (stats.orders.length > 0) {
+    stats.orders.forEach(o => {
+      // The user requested short prefixes "80252885" instead of full order trackings in the template. 
+      // E.g string "2026030380252885", taking the last 8 digits.
+      messageText += `${o.slice(-8)}\n`;
+    });
+  } else {
+    messageText += `-\n`;
+  }
+  messageText += `\n━━━━━━━━━━━━━━\n\n`;
+
+  messageText += `📎 ไฟล์\n`;
+  messageText += `PDF: ${pdfUrl}\n`;
+  messageText += `CSV: ${csvUrl}`;
+
   await client.pushMessage({
     to: adminLineUid,
     messages: [
       {
         type: "text",
-        text: `📊 สรุปประจำวัน ${stats.date}\n\nจำนวนออเดอร์: ${stats.totalOrders} รายการ\nยอดรวม: ฿${stats.totalRevenue.toLocaleString()}\n\nPDF: ${pdfUrl}\nCSV: ${csvUrl}`,
+        text: messageText,
       },
     ],
   });
@@ -117,4 +170,15 @@ function createApprovalFlexMessage(
       },
     },
   };
+}
+
+export async function broadcastMessage(text: string) {
+  await adminClient.broadcast({
+    messages: [
+      {
+        type: "text",
+        text,
+      },
+    ],
+  });
 }

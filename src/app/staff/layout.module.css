@@ -61,6 +61,22 @@
   color: #1f2937;
 }
 
+.logoutButton {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.logoutButton:hover {
+  background: #fecaca;
+}
+
 .content {
   max-width: 1200px;
   margin: 0 auto;

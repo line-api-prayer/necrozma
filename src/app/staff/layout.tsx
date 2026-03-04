@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { authClient } from "~/server/lib/auth-client";
 import styles from "./layout.module.css";
 
 export default function StaffLayout({
@@ -6,6 +10,18 @@ export default function StaffLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login");
+        },
+      },
+    });
+  };
+
   return (
     <div className={styles.layout}>
       <header className={styles.header}>
@@ -20,6 +36,9 @@ export default function StaffLayout({
           <Link href="/staff/scan" className={styles.navLink}>
             สแกน QR
           </Link>
+          <button onClick={handleLogout} className={styles.logoutButton}>
+            ออกจากระบบ
+          </button>
         </nav>
       </header>
       <div className={styles.content}>{children}</div>

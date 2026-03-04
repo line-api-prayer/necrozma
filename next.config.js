@@ -5,6 +5,11 @@
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+    serverExternalPackages: ["pdfmake"],
+    outputFileTracingIncludes: {
+        "/*": ["./public/fonts/**/*"],
+    },
+};
 
 export default config;

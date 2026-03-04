@@ -7,31 +7,86 @@ import {
   generateCsvString,
 } from "~/server/lib/report-generator";
 import { sendDailySummaryToAdmin } from "~/server/lib/line/messaging-client";
-import { type OrderRow } from "~/server/lib/line/types";
+import {
+  type OrderRow,
+  type OrderItemRow,
+  type EvidenceRow,
+  type OrderWithItems,
+  toOrder,
+  toOrderItem,
+  toEvidence,
+} from "~/server/lib/line/types";
 
 async function buildReportData(date: string) {
   const supabase = await supabaseClient();
-  const { data, error } = await supabase
+  const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
     .select("*")
     .eq("order_date", date);
 
-  if (error) throw new Error(error.message);
+  if (ordersError) throw new Error(ordersError.message);
 
-  const orders = (data ?? []) as OrderRow[];
+  const orders = (ordersData ?? []) as OrderRow[];
+  const orderIds = orders.map((o) => o.id);
+
+  if (orderIds.length === 0) {
+    return {
+      date,
+      orders: [],
+      totalRevenue: 0,
+      pendingCount: 0,
+      uploadedCount: 0,
+      completedCount: 0,
+      items: [],
+      orderNumbers: [],
+    };
+  }
+
+  const [itemsResult, evidenceResult] = await Promise.all([
+    supabase.from("order_items").select("*").in("order_id", orderIds),
+    supabase.from("evidence").select("*").in("order_id", orderIds),
+  ]);
+
+  const items = ((itemsResult.data ?? []) as OrderItemRow[]).map(toOrderItem);
+  const evidence = ((evidenceResult.data ?? []) as EvidenceRow[]).map(toEvidence);
+
+  const ordersWithItems: OrderWithItems[] = orders.map((order) => {
+    const domainOrder = toOrder(order);
+    return {
+      ...domainOrder,
+      items: items.filter((i) => i.orderId === order.id),
+      evidence: evidence.filter((e) => e.orderId === order.id),
+    };
+  });
+
   const totalRevenue = orders.reduce(
     (sum, o) => sum + Number(o.total_price),
     0,
   );
 
+  const itemsMap = new Map<string, { name: string; qty: number; total: number }>();
+  
+  ordersWithItems.forEach(order => {
+    order.items.forEach(item => {
+      const existing = itemsMap.get(item.name);
+      if (existing) {
+        existing.qty += item.quantity;
+        existing.total += Number(item.price) * item.quantity;
+      } else {
+        itemsMap.set(item.name, { name: item.name, qty: item.quantity, total: Number(item.price) * item.quantity });
+      }
+    });
+  });
+
   return {
     date,
-    orders,
+    orders: ordersWithItems,
     totalRevenue,
     pendingCount: orders.filter((o) => o.internal_status === "PENDING").length,
     uploadedCount: orders.filter((o) => o.internal_status === "UPLOADED").length,
-    completedCount: orders.filter((o) => o.internal_status === "COMPLETED")
-      .length,
+    completedCount: orders.filter((o) => o.internal_status === "COMPLETED").length,
+    items: Array.from(itemsMap.values()),
+    orderNumbers: ordersWithItems.map(o => o.lineOrderNo),
   };
 }
 
@@ -72,9 +127,10 @@ export const reportRouter = createTRPCRouter({
         .from("reports")
         .getPublicUrl(csvPath);
 
+      const timestamp = Date.now();
       return {
-        pdfUrl: pdfUrl.publicUrl,
-        csvUrl: csvUrl.publicUrl,
+        pdfUrl: `${pdfUrl.publicUrl}?v=${timestamp}`,
+        csvUrl: `${csvUrl.publicUrl}?v=${timestamp}`,
       };
     }),
 
@@ -111,15 +167,18 @@ export const reportRouter = createTRPCRouter({
         .getPublicUrl(csvPath);
 
       // Send via LINE to admin
+      const timestamp = Date.now();
       await sendDailySummaryToAdmin(
         env.ADMIN_LINE_UID,
         {
           date: input.date,
           totalOrders: reportData.orders.length,
           totalRevenue: reportData.totalRevenue,
+          items: reportData.items,
+          orders: reportData.orderNumbers,
         },
-        pdfUrl.publicUrl,
-        csvUrl.publicUrl,
+        `${pdfUrl.publicUrl}?v=${timestamp}`,
+        `${csvUrl.publicUrl}?v=${timestamp}`,
       );
 
       return { success: true };

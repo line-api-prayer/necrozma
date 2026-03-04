@@ -105,16 +105,6 @@ export const orderRouter = createTRPCRouter({
     .query(async ({ input }) => {
       const supabase = await supabaseClient();
 
-      // Whenever a specific date is requested, automatically sync from LINE MyShop first 
-      // (this replaces the need for clicking "Sync" manually every time).
-      if (input.date) {
-        try {
-          await syncOrdersFromLine(supabase, input.date);
-        } catch (error) {
-          console.error(`Auto-sync failed for date ${input.date}:`, error);
-        }
-      }
-
       let query = supabase
         .from("orders")
         .select("*")
@@ -193,13 +183,6 @@ export const orderRouter = createTRPCRouter({
     .input(z.object({ date: z.string() }))
     .query(async ({ input }): Promise<DailySummary> => {
       const supabase = await supabaseClient();
-
-      // Whenever summary is requested, verify if it was synced yet today
-      try {
-        await syncOrdersFromLine(supabase, input.date);
-      } catch (error) {
-        console.error(`Auto-sync failed during daily summary for date ${input.date}:`, error);
-      }
 
       const { data, error } = await supabase
         .from("orders")

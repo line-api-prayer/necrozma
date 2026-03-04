@@ -1,8 +1,13 @@
-import { type OrderRow } from "~/server/lib/line/types";
+import { type OrderWithItems } from "~/server/lib/line/types";
+import { env } from "~/env.js";
+// @ts-expect-error - pdfmake/js/Printer lacks a declaration file
+import PdfPrinter from "pdfmake/js/Printer.js";
+import path from "path";
+import fs from "fs";
 
 interface ReportData {
   date: string;
-  orders: OrderRow[];
+  orders: OrderWithItems[];
   totalRevenue: number;
   pendingCount: number;
   uploadedCount: number;
@@ -10,75 +15,161 @@ interface ReportData {
 }
 
 export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
-  // @ts-expect-error - pdfmake/js/Printer lacks a declaration file
-  const { default: PdfPrinter } = (await import("pdfmake/js/Printer")) as unknown as {
-    default: new (fonts: Record<string, Record<string, string>>) => {
-      createPdfKitDocument: (
-        docDefinition: Record<string, unknown>,
-      ) => NodeJS.ReadableStream & { end: () => void };
-    };
+  // Use absolute paths for server-side pdfmake
+  const fontsPath = path.resolve(process.cwd(), "public", "fonts");
+  
+  const fontFiles = {
+    normal: path.join(fontsPath, "THSarabunNew.ttf"),
+    bold: path.join(fontsPath, "THSarabunNew-Bold.ttf"),
+    italics: path.join(fontsPath, "THSarabunNew-Italic.ttf"),
+    bolditalics: path.join(fontsPath, "THSarabunNew-BoldItalic.ttf"),
   };
+
+  // Verify files exist and log for debugging
+  console.log(`[PDF] Loading fonts from: ${fontsPath}`);
+  for (const [key, filePath] of Object.entries(fontFiles)) {
+    if (!fs.existsSync(filePath)) {
+      console.error(`[PDF] Missing font file for ${key}: ${filePath}`);
+    }
+  }
 
   const fonts = {
-    Roboto: {
-      normal: "node_modules/pdfmake/fonts/Roboto/Roboto-Regular.ttf",
-      bold: "node_modules/pdfmake/fonts/Roboto/Roboto-Medium.ttf",
-      italics: "node_modules/pdfmake/fonts/Roboto/Roboto-Italic.ttf",
-      bolditalics:
-        "node_modules/pdfmake/fonts/Roboto/Roboto-MediumItalic.ttf",
-    },
+    // We MUST map Roboto to our Thai-supporting font
+    Roboto: fontFiles,
+    THSarabunNew: fontFiles,
   };
 
+  // On server-side, we DO NOT pass the vfs object if using absolute paths
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
   const printer = new PdfPrinter(fonts);
 
+  const summaryItems: { name: string; qty: number; total: number }[] = [];
+  
+  data.orders.forEach(order => {
+    order.items.forEach(item => {
+      const existing = summaryItems.find(i => i.name === item.name);
+      if (existing) {
+        existing.qty += item.quantity;
+        existing.total += Number(item.price) * item.quantity;
+      } else {
+        summaryItems.push({ name: item.name, qty: item.quantity, total: Number(item.price) * item.quantity });
+      }
+    });
+  });
+
   const tableBody = [
-    ["#", "Order No", "Customer", "Status", "Total"],
-    ...data.orders.map((o, i) => [
-      String(i + 1),
-      o.line_order_no,
-      o.customer_name,
-      o.internal_status,
-      `${Number(o.total_price).toLocaleString()}`,
-    ]),
+    [
+      { text: "#", style: "tableHeader" },
+      { text: "Order No.", style: "tableHeader" },
+      { text: "Ref Order No.", style: "tableHeader" },
+      { text: "ชื่อ", style: "tableHeader" },
+      { text: "รหัสแพ็กเกจ", style: "tableHeader" },
+      { text: "ประเภท", style: "tableHeader" },
+      { text: "แพ็กเกจ", style: "tableHeader" },
+      { text: "จำนวน", style: "tableHeader" },
+      { text: "QR", style: "tableHeader" },
+    ],
+    ...data.orders.flatMap((o, orderIndex) => 
+      o.items.map((item, itemIndex) => [
+        itemIndex === 0 ? String(orderIndex + 1) : "",
+        itemIndex === 0 ? o.lineOrderNo : "",
+        itemIndex === 0 ? o.lineOrderNo : "",
+        itemIndex === 0 ? o.customerName : "",
+        item.sku ?? "-",
+        "ฝากใส่บาตร",
+        item.name ?? "-",
+        String(item.quantity ?? 0),
+        { qr: `${env.BETTER_AUTH_URL}/staff/order/${o.lineOrderNo}`, fit: 40 },
+      ])
+    ),
   ];
 
+  // Group items into columns (max 4 items per column for layout aesthetic)
+  const summaryColumns: any[] = [
+    {
+      stack: [
+        { text: "วันดำเนินการ", color: "#6b7280", fontSize: 12 },
+        { text: data.date, fontSize: 14, bold: true, margin: [0, 4, 0, 0] },
+      ],
+    },
+    {
+      stack: [
+        { text: "ยอดที่ต้องโอน", color: "#6b7280", fontSize: 12 },
+        { text: `฿${data.totalRevenue.toLocaleString()}`, fontSize: 14, bold: true, margin: [0, 4, 0, 0] },
+      ],
+    }
+  ];
+
+  // Distribute items across the 2 columns evenly
+  summaryItems.forEach((item, index) => {
+    const colIndex = index % 2;
+    
+    summaryColumns[colIndex].stack.push(
+      { text: item.name, color: "#6b7280", fontSize: 12, margin: [0, 10, 0, 0] },
+      { text: String(item.qty), fontSize: 14, bold: true, margin: [0, 4, 0, 0] }
+    );
+  });
+
   const docDefinition = {
+    pageOrientation: "landscape",
+    pageMargins: [10, 30, 10, 30],
     content: [
-      { text: `Daily Summary — ${data.date}`, style: "header" },
-      { text: `Total Orders: ${data.orders.length}`, margin: [0, 10, 0, 0] },
       {
-        text: `Total Revenue: ${data.totalRevenue.toLocaleString()} THB`,
-        margin: [0, 5, 0, 0],
+        text: [
+          { text: "สรุปออเดอร์", fontSize: 18, bold: true, color: "#7c3aed" },
+        ],
+        margin: [0, 0, 0, 20],
       },
       {
-        text: `Pending: ${data.pendingCount} | Uploaded: ${data.uploadedCount} | Completed: ${data.completedCount}`,
-        margin: [0, 5, 0, 15],
+        columns: summaryColumns,
+        margin: [0, 0, 0, 30],
       },
       {
         table: {
           headerRows: 1,
-          widths: ["auto", "*", "*", "auto", "auto"],
+          widths: ["auto", 75, 75, "*", "auto", "auto", "*", "auto", "auto"],
           body: tableBody,
+        },
+        layout: {
+          hLineWidth: (i: number, node: { table: { body: unknown[] } }) => (i === 0 || i === node.table.body.length) ? 1 : 0.5,
+          vLineWidth: () => 0,
+          hLineColor: () => "#e5e7eb",
+          paddingLeft: () => 4,
+          paddingRight: () => 4,
+          paddingTop: () => 4,
+          paddingBottom: () => 4,
         },
       },
     ],
     styles: {
-      header: {
-        fontSize: 18,
+      tableHeader: {
+        fontSize: 12,
         bold: true,
-        margin: [0, 0, 0, 10],
+        color: "#6b7280",
+        fillColor: "#f9fafb",
       },
+    },
+    defaultStyle: {
+      fontSize: 14,
+      font: "THSarabunNew", // Set default to our Thai font
     },
   };
 
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+  const doc = await printer.createPdfKitDocument(docDefinition);
   return new Promise((resolve, reject) => {
-    const doc = printer.createPdfKitDocument(docDefinition);
-    const chunks: Buffer[] = [];
-    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-    doc.end();
+    try {
+      const chunks: Buffer[] = [];
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", (err: Error) => reject(err));
+      doc.end();
+    } catch (err) {
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      reject(err);
+    }
   });
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 }
 
 export function generateCsvString(data: ReportData): string {
@@ -97,11 +188,11 @@ export function generateCsvString(data: ReportData): string {
   const rows = data.orders.map((o, i) =>
     [
       String(i + 1),
-      o.line_order_no,
-      `"${o.customer_name}"`,
-      o.internal_status,
-      Number(o.total_price).toFixed(2),
-      o.order_date,
+      o.lineOrderNo,
+      `"${o.customerName}"`,
+      o.internalStatus,
+      Number(o.totalPrice).toFixed(2),
+      o.orderDate,
     ].join(","),
   );
 

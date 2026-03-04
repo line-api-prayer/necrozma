@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "~/trpc/react";
+import { authClient } from "~/server/lib/auth-client";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import { StatsCards } from "./_components/stats-cards";
 import { OrderTable } from "./_components/order-table";
@@ -11,6 +13,7 @@ import { DailySummaryButton } from "./_components/daily-summary-button";
 import styles from "./admin.module.css";
 
 export default function Admin() {
+  const router = useRouter();
   const today = new Date().toISOString().split("T")[0]!;
   const [selectedDate, setSelectedDate] = useState(today);
   const [reviewOrder, setReviewOrder] = useState<OrderWithItems | null>(null);
@@ -42,6 +45,16 @@ export default function Admin() {
     },
   });
 
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login");
+        },
+      },
+    });
+  };
+
   return (
     <div className={styles.layout}>
       <main className={styles.main}>
@@ -62,7 +75,9 @@ export default function Admin() {
               <div className={styles.userName}>ผู้ดูแลระบบ</div>
               <div className={styles.userRole}>Super Admin</div>
             </div>
-            <button className={styles.logoutButton}>ออกจากระบบ</button>
+            <button onClick={handleLogout} className={styles.logoutButton}>
+              ออกจากระบบ
+            </button>
           </div>
         </header>
 
