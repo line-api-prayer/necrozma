@@ -1,30 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
-import { type WebhookEvent } from "@line/bot-sdk";
+import { validateSignature, type WebhookEvent } from "@line/bot-sdk";
 import { env } from "~/env.js";
 import { handleWebhookEvents } from "~/server/lib/line/webhook-handler";
 
 export async function POST(request: NextRequest) {
   try {
-    // Read the exact raw bytes for LINE signature verification 
-    // This avoids Next.js stringification affecting the HMAC
-    const rawBodyBuffer = Buffer.from(await request.arrayBuffer());
-    const textBody = rawBodyBuffer.toString('utf8');
-    
+    const textBody = await request.text();
     const signature = request.headers.get("x-line-signature");
 
     if (!signature) {
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
 
-    // Verify HMAC-SHA256 signature using the precise raw buffer
-    const expectedSignature = crypto
-      .createHmac("sha256", env.LINE_ADMIN_BOT_CHANNEL_SECRET)
-      .update(rawBodyBuffer)
-      .digest("base64");
-
-    if (signature !== expectedSignature) {
-      console.error("[LINE] Signature verification failed", { signature, expectedSignature });
+    // Use the official LINE bot SDK validateSignature method
+    if (!validateSignature(textBody, env.LINE_ADMIN_BOT_CHANNEL_SECRET, signature)) {
+      console.error("[LINE] Signature verification failed. Signature:", signature);
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
