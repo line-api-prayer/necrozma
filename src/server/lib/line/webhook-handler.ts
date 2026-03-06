@@ -24,14 +24,31 @@ function parseThaiDate(dateStr: string): string {
  * and send the daily summary to the requesting user.
  */
 async function syncAndSendSummary(targetDate: string | undefined, lineUid: string) {
-  console.log(`[LINE Webhook] Syncing orders and generating summary for user: ${lineUid}, date: ${targetDate ?? "today"}`);
+  const dateToSync = targetDate ?? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  console.log(`[LINE Webhook] Received summary request for user: ${lineUid}, date: ${dateToSync}`);
 
-  // Sync orders from LINE Shop API → database before generating summary
   try {
-    const synced = await syncOrdersForDate(targetDate);
-    console.log(`[LINE Webhook] Synced ${synced} orders for date: ${targetDate ?? "today"}`);
+    const supabase = await supabaseClient();
+    
+    // Check if we already have orders for this date
+    const { count, error } = await supabase
+      .from("orders")
+      .select("*", { count: "exact", head: true })
+      .eq("order_date", dateToSync);
+
+    if (error) {
+      console.error("[LINE Webhook] Error checking existing orders:", error);
+      // Fallback: try to sync just in case
+      await syncOrdersForDate(targetDate);
+    } else if (count && count > 0) {
+      console.log(`[LINE Webhook] Found ${count} existing orders for ${dateToSync}. Skipping LINE Shop API sync.`);
+    } else {
+      console.log(`[LINE Webhook] No existing orders found for ${dateToSync}. Syncing from LINE Shop API...`);
+      const synced = await syncOrdersForDate(targetDate);
+      console.log(`[LINE Webhook] Synced ${synced} orders from LINE Shop.`);
+    }
   } catch (err) {
-    console.error("[LINE Webhook] Failed to sync orders from LINE Shop:", err);
+    console.error("[LINE Webhook] Failed during sync/check step:", err);
     // Continue to generate summary from whatever is in the DB
   }
 
