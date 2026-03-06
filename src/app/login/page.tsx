@@ -15,7 +15,13 @@ export default function LoginPage() {
 
   const handleLineLogin = async () => {
     setLineLoading(true);
-    await authClient.signIn.social({ provider: "line" });
+    const params = new URLSearchParams(window.location.search);
+    const callbackURL = params.get("callbackUrl");
+    
+    await authClient.signIn.social({ 
+      provider: "line",
+      callbackURL: callbackURL || undefined
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,7 +41,15 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect based on role
+      // Redirect based on callbackUrl or role
+      const params = new URLSearchParams(window.location.search);
+      const callbackURL = params.get("callbackUrl");
+      
+      if (callbackURL) {
+        router.push(callbackURL);
+        return;
+      }
+
       const session = await authClient.getSession();
       const role = session.data?.user?.role;
 
