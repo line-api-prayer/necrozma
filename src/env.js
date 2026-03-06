@@ -12,7 +12,7 @@ export const env = createEnv({
     SUPABASE_URL: z.string().url(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     POSTGRES_URL: z.string().min(1),
-    BETTER_AUTH_URL: z.string().min(1),
+    BETTER_AUTH_URL: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(32),
     LINE_LOGIN_CHANNEL_ID: z.string().min(1),
     LINE_LOGIN_CHANNEL_SECRET: z.string().min(1),
