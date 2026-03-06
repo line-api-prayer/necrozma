@@ -1,5 +1,6 @@
 import { type OrderWithItems } from "~/server/lib/line/types";
 import { env } from "~/env.js";
+import { supabaseClient } from "~/server/db/supabase";
 // @ts-expect-error - pdfmake/js/Printer lacks a declaration file
 import PdfPrinter from "pdfmake/js/Printer.js";
 import path from "path";
@@ -43,16 +44,25 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
   const printer = new PdfPrinter(fonts);
 
+  // Fetch product mappings
+  const supabase = await supabaseClient();
+  const { data: mappingData } = await supabase.from("product_mappings").select("original_name, display_name");
+  const nameMap = new Map<string, string>();
+  mappingData?.forEach(m => nameMap.set(m.original_name, m.display_name));
+
+  const getDisplayName = (name: string) => nameMap.get(name) ?? name;
+
   const summaryItems: { name: string; qty: number; total: number }[] = [];
   
   data.orders.forEach(order => {
     order.items.forEach(item => {
-      const existing = summaryItems.find(i => i.name === item.name);
+      const displayName = getDisplayName(item.name);
+      const existing = summaryItems.find(i => i.name === displayName);
       if (existing) {
         existing.qty += item.quantity;
         existing.total += Number(item.price) * item.quantity;
       } else {
-        summaryItems.push({ name: item.name, qty: item.quantity, total: Number(item.price) * item.quantity });
+        summaryItems.push({ name: displayName, qty: item.quantity, total: Number(item.price) * item.quantity });
       }
     });
   });
@@ -77,7 +87,7 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
         itemIndex === 0 ? o.customerName : "",
         item.sku ?? "-",
         "ฝากใส่บาตร",
-        item.name ?? "-",
+        getDisplayName(item.name ?? "-"),
         String(item.quantity ?? 0),
         { 
           qr: `${env.BETTER_AUTH_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000")}/staff/order/${o.lineOrderNo}`, 

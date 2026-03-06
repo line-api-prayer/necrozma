@@ -2,4 +2,11 @@
 .next/
 node_modules/
 .vercel
-.env\n.env.local\n.env.development.local
+.env
+.env.local
+.env.development.local
+.env.vercel
+.env.vercel.preview
+.env.vercel.prod
+.vercel_config/
+*.tsbuildinfo

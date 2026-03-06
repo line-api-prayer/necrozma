@@ -36,6 +36,12 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
   let ordersWithItems: OrderWithItems[] = [];
   const itemsMap = new Map<string, { name: string; qty: number; total: number }>();
 
+  // Fetch product mappings
+  const { data: mappingData } = await supabase.from("product_mappings").select("original_name, display_name");
+  const nameMap = new Map<string, string>();
+  mappingData?.forEach(m => nameMap.set(m.original_name, m.display_name));
+  const getDisplayName = (name: string) => nameMap.get(name) ?? name;
+
   if (orderIds.length > 0) {
     const [itemsResult, evidenceResult] = await Promise.all([
       supabase.from("order_items").select("*").in("order_id", orderIds),
@@ -56,12 +62,13 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
     
     ordersWithItems.forEach(order => {
       order.items.forEach(item => {
-        const existing = itemsMap.get(item.name);
+        const displayName = getDisplayName(item.name);
+        const existing = itemsMap.get(displayName);
         if (existing) {
           existing.qty += item.quantity;
           existing.total += Number(item.price) * item.quantity;
         } else {
-          itemsMap.set(item.name, { name: item.name, qty: item.quantity, total: Number(item.price) * item.quantity });
+          itemsMap.set(displayName, { name: displayName, qty: item.quantity, total: Number(item.price) * item.quantity });
         }
       });
     });
