@@ -78,8 +78,11 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
         item.sku ?? "-",
         "ฝากใส่บาตร",
         item.name ?? "-",
-        String(item.quantity ?? 0),
-        { qr: `${env.BETTER_AUTH_URL}/staff/order/${o.lineOrderNo}`, fit: 60, eccLevel: 'H' },
+        { 
+          qr: `${env.BETTER_AUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000")}/staff/order/${o.lineOrderNo}`, 
+          fit: 60, 
+          eccLevel: 'H' 
+        },
       ])
     ),
   ];
