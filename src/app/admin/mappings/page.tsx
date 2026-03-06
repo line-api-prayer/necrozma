@@ -12,17 +12,22 @@ interface ProductMapping {
 }
 
 export default function MappingsPage() {
-  const [originalName, setOriginalName] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [isUpserting, setIsUpserting] = useState(false);
+  const [newOriginal, setNewOriginal] = useState("");
+  const [newDisplay, setNewDisplay] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  // Inline edit state: { [id]: { original_name, display_name } }
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editOriginal, setEditOriginal] = useState("");
+  const [editDisplay, setEditDisplay] = useState("");
 
   const utils = api.useUtils();
   const mappingsQuery = api.mapping.list.useQuery();
+  const mappings = (mappingsQuery.data as ProductMapping[] | undefined) ?? [];
+
   const upsertMutation = api.mapping.upsert.useMutation({
     onSuccess: async () => {
       await utils.mapping.list.invalidate();
-      setOriginalName("");
-      setDisplayName("");
     },
   });
   const deleteMutation = api.mapping.delete.useMutation({
@@ -31,141 +36,227 @@ export default function MappingsPage() {
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // --- Add new mapping ---
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!originalName || !displayName) return;
-    setIsUpserting(true);
+    if (!newOriginal.trim() || !newDisplay.trim()) return;
+    setIsAdding(true);
     try {
-      await upsertMutation.mutateAsync({ originalName, displayName });
+      await upsertMutation.mutateAsync({
+        originalName: newOriginal.trim(),
+        displayName: newDisplay.trim(),
+      });
+      setNewOriginal("");
+      setNewDisplay("");
     } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : "Someting went wrong"}`);
+      alert(`Error: ${err instanceof Error ? err.message : "Something went wrong"}`);
     } finally {
-      setIsUpserting(false);
+      setIsAdding(false);
     }
   };
 
-  const handleEdit = (mapping: ProductMapping) => {
-    setOriginalName(mapping.original_name);
-    setDisplayName(mapping.display_name);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // --- Start inline edit ---
+  const startEdit = (m: ProductMapping) => {
+    setEditingId(m.id);
+    setEditOriginal(m.original_name);
+    setEditDisplay(m.display_name);
   };
 
+  // --- Save inline edit ---
+  const saveEdit = async () => {
+    if (!editOriginal.trim() || !editDisplay.trim()) return;
+    try {
+      await upsertMutation.mutateAsync({
+        originalName: editOriginal.trim(),
+        displayName: editDisplay.trim(),
+      });
+      setEditingId(null);
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : "Something went wrong"}`);
+    }
+  };
+
+  // --- Cancel inline edit ---
+  const cancelEdit = () => setEditingId(null);
+
+  // --- Delete ---
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this mapping?")) return;
+    if (!confirm("Delete this mapping?")) return;
     try {
       await deleteMutation.mutateAsync({ id });
     } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : "Someting went wrong"}`);
+      alert(`Error: ${err instanceof Error ? err.message : "Something went wrong"}`);
     }
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
+    <div className={styles.root}>
+      {/* Page header */}
+      <header className={styles.header}>
         <div className={styles.breadcrumb}>
-          <Link href="/admin">Admin</Link> &gt; Product Mappings
+          <Link href="/admin" className={styles.breadcrumbLink}>Admin</Link>
+          <span className={styles.breadcrumbSep}>›</span>
+          <span>Product Mappings</span>
         </div>
-        <h1 className={styles.title}>Product Display Mappings</h1>
+        <h1 className={styles.title}>
+          <span className={styles.titleIcon}>⚙️</span>
+          Product Display Mappings
+        </h1>
         <p className={styles.subtitle}>
-          Map long LINE product names to shorter names for summaries and messages.
+          Map long LINE API product names to short, readable display names used in summaries and PDF reports.
         </p>
-      </div>
+      </header>
 
-      <div className={styles.grid}>
-        <div className={styles.card}>
-          <h2 className={styles.cardTitle}>Add / Edit Mapping</h2>
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div className={styles.field}>
-              <label>Original Product Name (from LINE)</label>
-              <input
-                type="text"
-                value={originalName}
-                onChange={(e) => setOriginalName(e.target.value)}
-                placeholder="e.g. ใส่บาตร ชุด S ร่ำรวย"
-                required
-              />
+      <div className={styles.layout}>
+        {/* Left: Add form */}
+        <aside className={styles.sidebar}>
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <span className={styles.cardIcon}>＋</span>
+              <h2 className={styles.cardTitle}>Add Mapping</h2>
             </div>
-            <div className={styles.field}>
-              <label>Display Name (Simplified)</label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. ใส่บาตรชุด S"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className={styles.submitBtn}
-              disabled={isUpserting}
-            >
-              {isUpserting ? "Saving..." : "Save Mapping"}
-            </button>
-            {originalName && (
-               <button
-               type="button"
-               className={styles.cancelBtn}
-               onClick={() => {
-                 setOriginalName("");
-                 setDisplayName("");
-               }}
-             >
-               Clear
-             </button>
-            )}
-          </form>
-        </div>
+            <form onSubmit={handleAdd} className={styles.form}>
+              <div className={styles.field}>
+                <label className={styles.label}>LINE API Name (exact)</label>
+                <textarea
+                  className={styles.textarea}
+                  value={newOriginal}
+                  onChange={(e) => setNewOriginal(e.target.value)}
+                  placeholder="e.g. ใส่บาตร ชุด S  ร่ำรวย"
+                  rows={2}
+                  required
+                />
+                <span className={styles.hint}>Copy-paste from LINE to avoid spacing issues</span>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.label}>Display Name</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={newDisplay}
+                  onChange={(e) => setNewDisplay(e.target.value)}
+                  placeholder="e.g. ใส่บาตรชุด S"
+                  required
+                />
+              </div>
+              <button type="submit" className={styles.addBtn} disabled={isAdding}>
+                {isAdding ? (
+                  <span className={styles.spinner} />
+                ) : (
+                  "Save Mapping"
+                )}
+              </button>
+            </form>
+          </div>
 
-        <div className={styles.card}>
-          <h2 className={styles.cardTitle}>Existing Mappings</h2>
-          {mappingsQuery.isLoading ? (
-            <p>Loading mappings...</p>
-          ) : (
-            <div className={styles.tableWrapper}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Original Name</th>
-                    <th>Display Name</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(mappingsQuery.data as ProductMapping[] | undefined)?.map((m) => (
-                    <tr key={m.id}>
-                      <td>{m.original_name}</td>
-                      <td>{m.display_name}</td>
-                      <td>
-                        <div className={styles.actions}>
-                          <button
-                            onClick={() => handleEdit(m)}
-                            className={styles.editBtn}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(m.id)}
-                            className={styles.deleteBtn}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {mappingsQuery.data?.length === 0 && (
+          <div className={styles.statsCard}>
+            <div className={styles.stat}>
+              <span className={styles.statNum}>{mappings.length}</span>
+              <span className={styles.statLabel}>Total Mappings</span>
+            </div>
+          </div>
+        </aside>
+
+        {/* Right: Table */}
+        <main className={styles.main}>
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <span className={styles.cardIcon}>↔</span>
+              <h2 className={styles.cardTitle}>Existing Mappings</h2>
+            </div>
+
+            {mappingsQuery.isLoading ? (
+              <div className={styles.loading}>
+                <span className={styles.loadingDot} />
+                <span className={styles.loadingDot} />
+                <span className={styles.loadingDot} />
+              </div>
+            ) : mappings.length === 0 ? (
+              <div className={styles.empty}>
+                <p>No mappings yet.</p>
+                <p>Add your first mapping using the form.</p>
+              </div>
+            ) : (
+              <div className={styles.tableWrapper}>
+                <table className={styles.table}>
+                  <thead>
                     <tr>
-                      <td colSpan={3} className={styles.empty}>
-                        No mappings found.
-                      </td>
+                      <th className={styles.th}>LINE API Name</th>
+                      <th className={styles.th}>Display Name</th>
+                      <th className={styles.th} style={{ width: "140px" }}>Actions</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                  </thead>
+                  <tbody>
+                    {mappings.map((m) =>
+                      editingId === m.id ? (
+                        // Inline edit row
+                        <tr key={m.id} className={styles.editRow}>
+                          <td className={styles.td}>
+                            <textarea
+                              className={styles.inlineTextarea}
+                              value={editOriginal}
+                              onChange={(e) => setEditOriginal(e.target.value)}
+                              rows={2}
+                              autoFocus
+                            />
+                          </td>
+                          <td className={styles.td}>
+                            <input
+                              className={styles.inlineInput}
+                              value={editDisplay}
+                              onChange={(e) => setEditDisplay(e.target.value)}
+                            />
+                          </td>
+                          <td className={styles.td}>
+                            <div className={styles.rowActions}>
+                              <button
+                                onClick={saveEdit}
+                                className={styles.saveBtn}
+                                disabled={upsertMutation.isPending}
+                              >
+                                {upsertMutation.isPending ? "…" : "Save"}
+                              </button>
+                              <button onClick={cancelEdit} className={styles.cancelBtn}>
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        // Normal row
+                        <tr key={m.id} className={styles.row}>
+                          <td className={styles.td}>
+                            <span className={styles.originalName}>{m.original_name}</span>
+                          </td>
+                          <td className={styles.td}>
+                            <span className={styles.displayBadge}>{m.display_name}</span>
+                          </td>
+                          <td className={styles.td}>
+                            <div className={styles.rowActions}>
+                              <button
+                                onClick={() => startEdit(m)}
+                                className={styles.editBtn}
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(m.id)}
+                                className={styles.deleteBtn}
+                                disabled={deleteMutation.isPending}
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );
