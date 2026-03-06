@@ -20,7 +20,7 @@ export default function LoginPage() {
     
     await authClient.signIn.social({ 
       provider: "line",
-      callbackURL: callbackURL || undefined
+      callbackURL: callbackURL ?? undefined
     });
   };
 
