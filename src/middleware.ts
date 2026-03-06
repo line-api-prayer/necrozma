@@ -20,8 +20,10 @@ export function middleware(request: NextRequest) {
   }
 
   // Check for Better Auth session cookie
+  // Note: In production (HTTPS), Better Auth prefixes cookies with __Secure-
   const sessionToken =
-    request.cookies.get("better-auth.session_token")?.value;
+    request.cookies.get("better-auth.session_token")?.value ??
+    request.cookies.get("__Secure-better-auth.session_token")?.value;
 
   if (!sessionToken && (pathname.startsWith("/admin") || pathname.startsWith("/staff"))) {
     const loginUrl = new URL("/login", request.url);
