@@ -5,6 +5,12 @@ import { api } from "~/trpc/react";
 import styles from "./mappings.module.css";
 import Link from "next/link";
 
+interface ProductMapping {
+  id: string;
+  original_name: string;
+  display_name: string;
+}
+
 export default function MappingsPage() {
   const [originalName, setOriginalName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -38,7 +44,7 @@ export default function MappingsPage() {
     }
   };
 
-  const handleEdit = (mapping: { original_name: string; display_name: string }) => {
+  const handleEdit = (mapping: ProductMapping) => {
     setOriginalName(mapping.original_name);
     setDisplayName(mapping.display_name);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -126,7 +132,7 @@ export default function MappingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mappingsQuery.data?.map((m) => (
+                  {(mappingsQuery.data as ProductMapping[] | undefined)?.map((m) => (
                     <tr key={m.id}>
                       <td>{m.original_name}</td>
                       <td>{m.display_name}</td>

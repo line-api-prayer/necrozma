@@ -2,6 +2,13 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { supabaseClient } from "~/server/db/supabase";
 
+interface ProductMapping {
+  id: string;
+  original_name: string;
+  display_name: string;
+  created_at: string;
+}
+
 export const mappingRouter = createTRPCRouter({
   list: publicProcedure.query(async () => {
     const supabase = await supabaseClient();
@@ -14,7 +21,7 @@ export const mappingRouter = createTRPCRouter({
       throw new Error(error.message);
     }
 
-    return data ?? [];
+    return (data ?? []) as ProductMapping[];
   }),
 
   upsert: publicProcedure
@@ -26,7 +33,7 @@ export const mappingRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const supabase = await supabaseClient();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from("product_mappings")
         .upsert(
           {
@@ -36,13 +43,13 @@ export const mappingRouter = createTRPCRouter({
           { onConflict: "original_name" }
         )
         .select()
-        .single();
+        .single()) as { data: ProductMapping | null; error: { message: string } | null };
 
       if (error) {
         throw new Error(error.message);
       }
 
-      return data;
+      return data!;
     }),
 
   delete: publicProcedure

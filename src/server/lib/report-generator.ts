@@ -45,10 +45,15 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
   const printer = new PdfPrinter(fonts);
 
   // Fetch product mappings
+  interface ProductMappingRow {
+    original_name: string;
+    display_name: string;
+  }
   const supabase = await supabaseClient();
   const { data: mappingData } = await supabase.from("product_mappings").select("original_name, display_name");
+  const typedMappingData = (mappingData ?? []) as ProductMappingRow[];
   const nameMap = new Map<string, string>();
-  mappingData?.forEach(m => nameMap.set(m.original_name, m.display_name));
+  typedMappingData.forEach(m => nameMap.set(m.original_name, m.display_name));
 
   const getDisplayName = (name: string) => nameMap.get(name) ?? name;
 
