@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api } from "~/trpc/react";
 import { authClient } from "~/server/lib/auth-client";
 import { type OrderWithItems } from "~/server/lib/line/types";
@@ -64,6 +65,9 @@ export default function Admin() {
             <span className={styles.logoText}>ฝากใส่บาตร Admin</span>
           </div>
           <div className={styles.userSection}>
+            <Link href="/admin/mappings" className={styles.filterButton} style={{ textDecoration: "none" }}>
+              ⚙️ จัดการ Mapping
+            </Link>
             <button
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending}
