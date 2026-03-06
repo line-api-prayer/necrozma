@@ -79,7 +79,7 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
         "ฝากใส่บาตร",
         item.name ?? "-",
         String(item.quantity ?? 0),
-        { qr: `${env.BETTER_AUTH_URL}/staff/order/${o.lineOrderNo}`, fit: 40 },
+        { qr: `${env.BETTER_AUTH_URL}/staff/order/${o.lineOrderNo}`, fit: 60, eccLevel: 'H' },
       ])
     ),
   ];
