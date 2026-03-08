@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "~/trpc/react";
+import { getSupabaseBrowserClient } from "~/lib/supabase-browser";
 import { Badge } from "~/app/_components/badge";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import styles from "./page.module.css";
@@ -35,6 +36,30 @@ export default function StaffPage() {
       total: orders.length,
     };
   }, [orders, selectedDate]);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("staff-orders")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders" },
+        (payload: { new: { internal_status?: string; rejection_reason?: string } }) => {
+          if (
+            (payload.new.internal_status === "PENDING" &&
+              payload.new.rejection_reason) ||
+            payload.new.internal_status === "COMPLETED"
+          ) {
+            void ordersQuery.refetch();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [ordersQuery]);
 
   return (
     <div className={styles.container}>

@@ -12,8 +12,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
 
+    const channelSecret =
+      process.env.NODE_ENV === "production"
+        ? env.LINE_CUSTOMER_PROD_BOT_CHANNEL_SECRET
+        : env.LINE_CUSTOMER_TEST_BOT_CHANNEL_SECRET;
+
     // Use the official LINE bot SDK validateSignature method
-    if (!validateSignature(textBody, env.LINE_ADMIN_BOT_CHANNEL_SECRET, signature)) {
+    if (!validateSignature(textBody, channelSecret, signature)) {
       console.error("[LINE] Signature verification failed. Signature:", signature);
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }

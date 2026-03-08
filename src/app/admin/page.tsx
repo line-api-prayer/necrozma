@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "~/trpc/react";
+import { getSupabaseBrowserClient } from "~/lib/supabase-browser";
 import { authClient } from "~/server/lib/auth-client";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import { StatsCards } from "./_components/stats-cards";
@@ -45,6 +46,27 @@ export default function Admin() {
       void summaryQuery.refetch();
     },
   });
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("admin-orders")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders" },
+        (payload: { new: { internal_status?: string } }) => {
+          if (payload.new.internal_status === "UPLOADED") {
+            void ordersQuery.refetch();
+            void summaryQuery.refetch();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [ordersQuery, summaryQuery]);
 
   const handleLogout = async () => {
     await authClient.signOut({

@@ -24,15 +24,16 @@ export const reviewRouter = createTRPCRouter({
         throw new Error("Order must be in UPLOADED status to approve");
       }
 
-      // Get evidence photo for the notification
+      // Get evidence photo and video for the notification
       const { data: evidenceRows } = await supabase
         .from("evidence")
         .select("public_url, type")
         .eq("order_id", input.orderId)
-        .eq("type", "photo")
-        .limit(1);
+        .in("type", ["photo", "video"]);
 
-      const photoUrl = (evidenceRows?.[0] as { public_url: string } | undefined)
+      const photoUrl = (evidenceRows?.find((r) => r.type === "photo") as { public_url: string } | undefined)
+        ?.public_url;
+      const videoUrl = (evidenceRows?.find((r) => r.type === "video") as { public_url: string } | undefined)
         ?.public_url;
 
       const { error: updateError } = await supabase
@@ -64,6 +65,7 @@ export const reviewRouter = createTRPCRouter({
               totalPrice: Number(order.total_price),
             },
             photoUrl,
+            videoUrl,
           );
         } catch (e) {
           console.error("Failed to send LINE approval notification:", e);

@@ -7,8 +7,8 @@ import styles from "./login.module.css";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@test.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [lineLoading, setLineLoading] = useState(false);
@@ -85,8 +85,35 @@ export default function LoginPage() {
         </button>
 
         <div className={styles.divider}>
-          <span>หรือ</span>
+          <span>หรือเข้าสู่ระบบด้วยอีเมล</span>
         </div>
+
+        {process.env.NODE_ENV === "development" && (
+          <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+            <button
+              type="button"
+              className={styles.submitButton}
+              style={{ backgroundColor: "#374151" }}
+              onClick={() => {
+                setEmail("admin@test.com");
+                setPassword("password123");
+              }}
+            >
+              Test Admin
+            </button>
+            <button
+              type="button"
+              className={styles.submitButton}
+              style={{ backgroundColor: "#374151" }}
+              onClick={() => {
+                setEmail("staff@test.com");
+                setPassword("password123");
+              }}
+            >
+              Test Staff
+            </button>
+          </div>
+        )}
 
         <form className={styles.form} onSubmit={handleSubmit}>
           {error && <div className={styles.error}>{error}</div>}
