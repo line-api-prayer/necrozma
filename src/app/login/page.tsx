@@ -1,23 +1,30 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "~/server/lib/auth-client";
 import { env } from "~/env.js";
 import styles from "./login.module.css";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [lineLoading, setLineLoading] = useState(false);
 
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (err === "banned") {
+      setError("บัญชีของคุณถูกระงับ หรืออยู่ระหว่างรอการอนุมัติจากแอดมิน");
+    }
+  }, [searchParams]);
+
   const handleLineLogin = async () => {
     setLineLoading(true);
-    const params = new URLSearchParams(window.location.search);
-    const callbackURL = params.get("callbackUrl");
+    const callbackURL = searchParams.get("callbackUrl");
     
     await authClient.signIn.social({ 
       provider: "line",
@@ -43,8 +50,7 @@ export default function LoginPage() {
       }
 
       // Redirect based on callbackUrl or role
-      const params = new URLSearchParams(window.location.search);
-      const callbackURL = params.get("callbackUrl");
+      const callbackURL = searchParams.get("callbackUrl");
       
       if (callbackURL) {
         router.push(callbackURL);
@@ -161,5 +167,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

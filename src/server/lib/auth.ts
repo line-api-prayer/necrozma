@@ -16,6 +16,26 @@ export const auth = betterAuth({
     },
   },
   plugins: [admin()],
+  advanced: {
+    useSecureCookies: true,
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          // If the user is signing up via social login (LINE), 
+          // we ban them by default until an admin approves.
+          return {
+            data: {
+              ...user,
+              banned: true,
+              banReason: "Waiting for admin approval",
+            },
+          };
+        },
+      },
+    },
+  },
   trustedOrigins: [
     "https://*.vercel.app",
     "https://*.ngrok-free.dev",

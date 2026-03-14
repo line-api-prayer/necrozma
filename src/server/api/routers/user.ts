@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, adminProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, adminProcedure, protectedProcedure } from "~/server/api/trpc";
 import { pool } from "~/server/db/pg";
 import { TRPCError } from "@trpc/server";
 
@@ -9,12 +9,24 @@ interface UserRow {
   email: string;
   role: string;
   image: string | null;
+  banned: boolean | null;
+}
+
+interface NotificationRow {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: string;
+  is_read: boolean;
+  link: string | null;
+  created_at: string;
 }
 
 export const userRouter = createTRPCRouter({
   list: adminProcedure.query(async ({ ctx }) => {
     const { rows } = await pool.query<UserRow>(
-      'SELECT id, name, email, role, image FROM public.user ORDER BY "createdAt" DESC'
+      'SELECT id, name, email, role, image, banned FROM public.user ORDER BY "createdAt" DESC'
     );
     // Filter out current user from management list for safety
     return rows.filter((user) => user.id !== ctx.user.id);
@@ -26,13 +38,14 @@ export const userRouter = createTRPCRouter({
         id: z.string(),
         name: z.string().min(1).optional(),
         role: z.enum(["admin", "user"]).optional(),
+        banned: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
-      const { id, name, role } = input;
+      const { id, name, role, banned } = input;
       
       const updates: string[] = [];
-      const values: (string | null | undefined)[] = [];
+      const values: (string | null | undefined | boolean)[] = [];
       let paramCount = 1;
 
       if (name !== undefined) {
@@ -42,6 +55,13 @@ export const userRouter = createTRPCRouter({
       if (role !== undefined) {
         updates.push(`role = $${paramCount++}`);
         values.push(role);
+      }
+      if (banned !== undefined) {
+        updates.push(`banned = $${paramCount++}`);
+        values.push(banned);
+        if (!banned) {
+          updates.push(`"banReason" = NULL`);
+        }
       }
 
       if (updates.length === 0) return { success: true };
@@ -82,4 +102,30 @@ export const userRouter = createTRPCRouter({
 
       return { success: true };
     }),
+
+  notifications: protectedProcedure.query(async ({ ctx }) => {
+    const { rows } = await pool.query<NotificationRow>(
+      "SELECT * FROM public.notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50",
+      [ctx.user.id]
+    );
+    return rows;
+  }),
+
+  markNotificationRead: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      await pool.query(
+        "UPDATE public.notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2",
+        [input.id, ctx.user.id]
+      );
+      return { success: true };
+    }),
+
+  markAllNotificationsRead: protectedProcedure.mutation(async ({ ctx }) => {
+    await pool.query(
+      "UPDATE public.notifications SET is_read = TRUE WHERE user_id = $1",
+      [ctx.user.id]
+    );
+    return { success: true };
+  }),
 });

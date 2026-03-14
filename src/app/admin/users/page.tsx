@@ -12,12 +12,14 @@ interface User {
   email: string;
   role: "admin" | "user";
   image: string | null;
+  banned: boolean | null;
 }
 
 export default function UsersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<"admin" | "user">("user");
+  const [editBanned, setEditBanned] = useState(false);
 
   const utils = api.useUtils();
   const usersQuery = api.user.list.useQuery();
@@ -40,6 +42,7 @@ export default function UsersPage() {
     setEditingId(user.id);
     setEditName(user.name ?? "");
     setEditRole(user.role);
+    setEditBanned(!!user.banned);
   };
 
   const handleSave = async () => {
@@ -49,6 +52,18 @@ export default function UsersPage() {
         id: editingId,
         name: editName,
         role: editRole,
+        banned: editBanned,
+      });
+    } catch (err) {
+      alert(`Error: ${err instanceof Error ? err.message : "Something went wrong"}`);
+    }
+  };
+
+  const handleQuickApprove = async (user: User) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: user.id,
+        banned: false,
       });
     } catch (err) {
       alert(`Error: ${err instanceof Error ? err.message : "Something went wrong"}`);
@@ -132,14 +147,24 @@ export default function UsersPage() {
                             </div>
                           </td>
                           <td className={styles.td}>
-                            <select 
-                              className={styles.inlineSelect}
-                              value={editRole}
-                              onChange={(e) => setEditRole(e.target.value as "admin" | "user")}
-                            >
-                              <option value="user">พนักงาน (Staff)</option>
-                              <option value="admin">ผู้ดูแลระบบ (Admin)</option>
-                            </select>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                              <select 
+                                className={styles.inlineSelect}
+                                value={editRole}
+                                onChange={(e) => setEditRole(e.target.value as "admin" | "user")}
+                              >
+                                <option value="user">พนักงาน (Staff)</option>
+                                <option value="admin">ผู้ดูแลระบบ (Admin)</option>
+                              </select>
+                              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.75rem" }}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={editBanned} 
+                                  onChange={(e) => setEditBanned(e.target.checked)}
+                                />
+                                ระงับการใช้งาน (Banned)
+                              </label>
+                            </div>
                           </td>
                           <td className={styles.td}>
                             <div className={styles.rowActions}>
@@ -170,15 +195,33 @@ export default function UsersPage() {
                             </div>
                           </td>
                           <td className={styles.td}>
-                            <span className={`${styles.roleBadge} ${user.role === "admin" ? styles.roleAdmin : styles.roleUser}`}>
-                              {user.role === "admin" ? "Admin" : "Staff"}
-                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span className={`${styles.roleBadge} ${user.role === "admin" ? styles.roleAdmin : styles.roleUser}`}>
+                                {user.role === "admin" ? "Admin" : "Staff"}
+                              </span>
+                              {user.banned && (
+                                <span className={styles.roleAdmin} style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem" }}>
+                                  รออนุมัติ
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className={styles.td}>
                             <div className={styles.rowActions}>
-                              <button onClick={() => startEdit(user)} className={styles.editBtn}>
-                                ✏️ แก้ไข
-                              </button>
+                              {user.banned ? (
+                                <button 
+                                  onClick={() => handleQuickApprove(user)} 
+                                  className={styles.saveBtn}
+                                  style={{ backgroundColor: "#22c55e" }}
+                                  disabled={updateMutation.isPending}
+                                >
+                                  ✅ อนุมัติ
+                                </button>
+                              ) : (
+                                <button onClick={() => startEdit(user)} className={styles.editBtn}>
+                                  ✏️ แก้ไข
+                                </button>
+                              )}
                               <button onClick={() => handleDelete(user.id)} className={styles.deleteBtn} disabled={deleteMutation.isPending}>
                                 🗑 ลบ
                               </button>
