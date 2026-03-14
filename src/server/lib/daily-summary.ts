@@ -140,7 +140,7 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
           nocacheCsvUrl,
         );
       } catch (e) {
-        console.error(`Failed to send daily summary via LINE to admin ${adminId}:`, e);
+        console.error("Failed to send daily summary via LINE to admin %s:", adminId, e);
       }
     }
   }
