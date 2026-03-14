@@ -97,6 +97,28 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.searchWrap {
+  flex: 1;
+  max-width: 400px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #f9fafb;
+}
+
+.searchInput:focus {
+  background: white;
+  outline: 2px solid #22c55e;
+  border-color: transparent;
 }
 
 .tableTitle {
