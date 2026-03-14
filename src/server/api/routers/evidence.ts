@@ -73,20 +73,22 @@ export const evidenceRouter = createTRPCRouter({
 
         if (updateError) throw new Error(updateError.message);
 
-        // Notify Admin that a new proof is ready for review
-        if (env.ADMIN_LINE_UID) {
-          try {
-            await adminClient.pushMessage({
-              to: env.ADMIN_LINE_UID,
-              messages: [
-                {
-                  type: "text",
-                  text: `🔔 มีหลักฐานใหม่ถูกอัพโหลดโดยพนักงาน\nคำสั่งซื้อ: ${orderData.line_order_no}\nลูกค้า: ${orderData.customer_name}\n\nกรุณาเข้าสู่ระบบเพื่อตรวจสอบและอนุมัติ: ${process.env.APP_URL ?? "https://admin.yourdomain.com"}`,
-                },
-              ],
-            });
-          } catch (e) {
-            console.error("Failed to notify admin of new proof upload:", e);
+        // Notify Admins that a new proof is ready for review
+        if (env.ADMIN_LINE_UID && env.ADMIN_LINE_UID.length > 0) {
+          for (const adminId of env.ADMIN_LINE_UID) {
+            try {
+              await adminClient.pushMessage({
+                to: adminId,
+                messages: [
+                  {
+                    type: "text",
+                    text: `🔔 มีหลักฐานใหม่ถูกอัพโหลดโดยพนักงาน\nคำสั่งซื้อ: ${orderData.line_order_no}\nลูกค้า: ${orderData.customer_name}\n\nกรุณาเข้าสู่ระบบเพื่อตรวจสอบและอนุมัติ`,
+                  },
+                ],
+              });
+            } catch (e) {
+              console.error(`Failed to notify admin ${adminId} of new proof upload:`, e);
+            }
           }
         }
       }

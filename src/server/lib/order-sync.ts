@@ -13,7 +13,7 @@ export async function syncOrdersForDate(targetDate?: string): Promise<number> {
 
   while (true) {
     const response = await listOrders({
-      status: ["FINALIZED", "COMPLETED", "EXPIRED", "CANCELED"],
+      status: ["READY_TO_SHIP", "SHIPPED", "FINALIZED", "COMPLETED", "EXPIRED", "CANCELED"],
       page,
       perPage: 50,
       includeItems: true,
