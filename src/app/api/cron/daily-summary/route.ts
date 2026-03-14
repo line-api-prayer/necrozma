@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "~/env.js";
 import { generateAndSendDailySummary } from "~/server/lib/daily-summary";
+import { syncOrdersForDate } from "~/server/lib/order-sync";
 
 export async function GET(request: NextRequest) {
-  // 1. Verify cron secret (Vercel sets this header for cron jobs)
+  // 1. Verify cron secret
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     console.warn("[CRON Daily Summary] Unauthorized access attempt or missing CRON_SECRET");
@@ -17,9 +18,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // 3. Perform a sync first to ensure data is up to date (Required for Hobby Plan once-a-day limit)
+    console.log("[CRON Daily Summary] Starting pre-summary sync...");
+    const syncedCount = await syncOrdersForDate();
+    console.log(`[CRON Daily Summary] Sync completed: ${syncedCount} orders processed`);
+
+    // 4. Generate and send the summary
     const result = await generateAndSendDailySummary();
     console.log(`[CRON Daily Summary] Success: Sent report for ${result.date} with ${result.orderCount} orders to ${env.ADMIN_LINE_UID.length} admins`);
-    return NextResponse.json(result);
+    
+    return NextResponse.json({
+      ...result,
+      syncedCount
+    });
   } catch (error) {
     console.error("[CRON Daily Summary] Failed:", error);
     const message = error instanceof Error ? error.message : "Internal Server Error";
