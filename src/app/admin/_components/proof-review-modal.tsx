@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import { RejectModal } from "./reject-modal";
 import styles from "./proof-review-modal.module.css";
@@ -108,11 +109,15 @@ export function ProofReviewModal({
 
             <div className={styles.evidenceArea}>
               {photo ? (
-                <img
-                  src={photo.publicUrl}
-                  alt="Evidence"
-                  className={styles.evidenceImage}
-                />
+                <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                  <Image
+                    src={photo.publicUrl}
+                    alt="Evidence"
+                    fill
+                    style={{ objectFit: "contain" }}
+                    unoptimized
+                  />
+                </div>
               ) : (
                 <div className={styles.noEvidence}>
                   <svg

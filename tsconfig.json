@@ -38,5 +38,5 @@
     "**/*.js",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "generated", "prototype", "test-*.ts", "test-*.mjs"]
+  "exclude": ["node_modules", "generated", "prototype", "scripts", "test-*.ts", "test-*.mjs"]
 }
