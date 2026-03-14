@@ -1,22 +1,50 @@
 import { messagingApi } from "@line/bot-sdk";
 import { env } from "~/env.js";
 
+const isTestMode = env.ENABLE_TEST_MODE === "true";
+
+const customerChannelAccessToken = isTestMode
+  ? env.LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN
+  : env.LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN;
+
 export const client = new messagingApi.MessagingApiClient({
-  channelAccessToken: env.LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN,
+  channelAccessToken: customerChannelAccessToken,
 });
 
-export const adminClient = client;
+export const adminClient = new messagingApi.MessagingApiClient({
+  channelAccessToken: env.LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN,
+});
 
 export async function sendApprovalNotification(
   lineUid: string,
   order: { lineOrderNo: string; customerName: string; totalPrice: number },
   evidencePhotoUrl?: string,
+  evidenceVideoUrl?: string,
 ) {
-  const flexMessage = createApprovalFlexMessage(order, evidencePhotoUrl);
+  const messages: messagingApi.Message[] = [
+    createApprovalFlexMessage(order, evidencePhotoUrl),
+  ];
+
+  if (evidenceVideoUrl && evidencePhotoUrl) {
+    messages.push({
+      type: "video",
+      originalContentUrl: evidenceVideoUrl,
+      previewImageUrl: evidencePhotoUrl,
+    });
+  }
+
+  const targetUserId =
+    isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
+
+  if (isTestMode && env.DEV_TEST_USER_ID) {
+    console.warn(
+      `[TEST MODE] Redirecting approval message from ${lineUid} to ${targetUserId}`,
+    );
+  }
 
   await client.pushMessage({
-    to: lineUid,
-    messages: [flexMessage],
+    to: targetUserId,
+    messages,
   });
 }
 
@@ -25,8 +53,17 @@ export async function sendRejectionNotification(
   order: { lineOrderNo: string; customerName: string },
   reason: string,
 ) {
+  const targetUserId =
+    isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
+
+  if (isTestMode && env.DEV_TEST_USER_ID) {
+    console.warn(
+      `[TEST MODE] Redirecting rejection message from ${lineUid} to ${targetUserId}`,
+    );
+  }
+
   await client.pushMessage({
-    to: lineUid,
+    to: targetUserId,
     messages: [
       {
         type: "text",
@@ -91,8 +128,17 @@ export async function sendDailySummaryToAdmin(
   messageText += `PDF: ${pdfUrl}\n`;
   messageText += `CSV: ${csvUrl}`;
 
-  await client.pushMessage({
-    to: adminLineUid,
+  const targetUserId =
+    isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : adminLineUid;
+
+  if (isTestMode && env.DEV_TEST_USER_ID) {
+    console.warn(
+      `[TEST MODE] Redirecting daily summary from admin ${adminLineUid} to ${targetUserId}`,
+    );
+  }
+
+  await adminClient.pushMessage({
+    to: targetUserId,
     messages: [
       {
         type: "text",

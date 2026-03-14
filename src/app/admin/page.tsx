@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api } from "~/trpc/react";
+import { getSupabaseBrowserClient } from "~/lib/supabase-browser";
 import { authClient } from "~/server/lib/auth-client";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import { StatsCards } from "./_components/stats-cards";
@@ -10,6 +12,7 @@ import { OrderTable } from "./_components/order-table";
 import { ProofReviewModal } from "./_components/proof-review-modal";
 import { LineSuccessModal } from "./_components/line-success-modal";
 import { DailySummaryButton } from "./_components/daily-summary-button";
+import { NotificationBell } from "~/app/_components/notification-bell";
 import styles from "./admin.module.css";
 
 export default function Admin() {
@@ -20,9 +23,12 @@ export default function Admin() {
   const [approvedCustomer, setApprovedCustomer] = useState<string | null>(null);
 
   const ordersQuery = api.order.list.useQuery({ date: selectedDate });
+  const mappingsQuery = api.mapping.list.useQuery();
   const summaryQuery = api.order.getDailySummary.useQuery({
     date: selectedDate,
   });
+  const session = authClient.useSession();
+  const userId = session.data?.user?.id;
   const syncMutation = api.order.syncFromLine.useMutation({
     onSuccess: () => {
       void ordersQuery.refetch();
@@ -45,6 +51,27 @@ export default function Admin() {
     },
   });
 
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("admin-orders")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders" },
+        (payload: { new: { internal_status?: string } }) => {
+          if (payload.new.internal_status === "UPLOADED") {
+            void ordersQuery.refetch();
+            void summaryQuery.refetch();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [ordersQuery, summaryQuery]);
+
   const handleLogout = async () => {
     await authClient.signOut({
       fetchOptions: {
@@ -64,6 +91,15 @@ export default function Admin() {
             <span className={styles.logoText}>ฝากใส่บาตร Admin</span>
           </div>
           <div className={styles.userSection}>
+            <Link href="/staff" className={styles.filterButton} style={{ textDecoration: "none", backgroundColor: "#f3f4f6" }}>
+              📱 โหมดพนักงาน
+            </Link>
+            <Link href="/admin/users" className={styles.filterButton} style={{ textDecoration: "none" }}>
+              👥 จัดการ User
+            </Link>
+            <Link href="/admin/mappings" className={styles.filterButton} style={{ textDecoration: "none" }}>
+              ⚙️ จัดการชื่อสินค้า
+            </Link>
             <button
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending}
@@ -75,6 +111,7 @@ export default function Admin() {
               <div className={styles.userName}>ผู้ดูแลระบบ</div>
               <div className={styles.userRole}>Super Admin</div>
             </div>
+            {userId && <NotificationBell userId={userId} />}
             <button onClick={handleLogout} className={styles.logoutButton}>
               ออกจากระบบ
             </button>
@@ -113,6 +150,7 @@ export default function Admin() {
 
           <OrderTable
             orders={(ordersQuery.data ?? []) as OrderWithItems[]}
+            mappings={mappingsQuery.data}
             onReview={setReviewOrder}
           />
         </div>

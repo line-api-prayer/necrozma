@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "~/trpc/react";
+import { getSupabaseBrowserClient } from "~/lib/supabase-browser";
 import { Badge } from "~/app/_components/badge";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import styles from "./page.module.css";
@@ -11,12 +12,33 @@ export default function StaffPage() {
   const router = useRouter();
   const today = new Date().toISOString().split("T")[0]!;
   const [selectedDate, setSelectedDate] = useState(today);
+  const [search, setSearch] = useState("");
 
   const ordersQuery = api.order.list.useQuery({ date: selectedDate || undefined });
-  const orders = useMemo(
+  const mappingsQuery = api.mapping.list.useQuery();
+  const allOrders = useMemo(
     () => (ordersQuery.data ?? []) as OrderWithItems[],
     [ordersQuery.data],
   );
+
+  const getDisplayName = (originalName: string) => {
+    const mappings = mappingsQuery.data;
+    if (!mappings) return originalName;
+    const normalize = (s: string) => s.trim().replace(/\s+/g, " ");
+    const target = normalize(originalName);
+    const mapping = mappings.find((m) => normalize(m.original_name) === target);
+    return mapping ? mapping.display_name : originalName;
+  };
+
+  const orders = useMemo(() => {
+    if (!search) return allOrders;
+    const q = search.toLowerCase();
+    return allOrders.filter(
+      (o) =>
+        o.lineOrderNo.toLowerCase().includes(q) ||
+        o.customerName.toLowerCase().includes(q),
+    );
+  }, [allOrders, search]);
 
   const summary = useMemo(() => {
     const totalAmount = orders.reduce(
@@ -35,6 +57,30 @@ export default function StaffPage() {
       total: orders.length,
     };
   }, [orders, selectedDate]);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    const channel = supabase
+      .channel("staff-orders")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders" },
+        (payload: { new: { internal_status?: string; rejection_reason?: string } }) => {
+          if (
+            (payload.new.internal_status === "PENDING" &&
+              payload.new.rejection_reason) ||
+            payload.new.internal_status === "COMPLETED"
+          ) {
+            void ordersQuery.refetch();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [ordersQuery]);
 
   return (
     <div className={styles.container}>
@@ -87,6 +133,15 @@ export default function StaffPage() {
           <h3 className={styles.tableTitle}>
             รายการออเดอร์ ({orders.length})
           </h3>
+          <div className={styles.searchWrap}>
+            <input
+              type="text"
+              className={styles.searchInput}
+              placeholder="ค้นหาเลขที่คำสั่งซื้อ หรือชื่อลูกค้า..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
 
         {orders.length > 0 ? (
@@ -127,7 +182,7 @@ export default function StaffPage() {
                     <td>
                       {order.items[0] && (
                         <>
-                          <div>{order.items[0].name}</div>
+                          <div>{getDisplayName(order.items[0].name)}</div>
                           <div className={styles.refNo}>
                             {order.items[0].sku ?? ""}
                           </div>

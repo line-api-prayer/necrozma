@@ -12,13 +12,19 @@ export const env = createEnv({
     SUPABASE_URL: z.string().url(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     POSTGRES_URL: z.string().min(1),
-    BETTER_AUTH_URL: z.string().min(1),
+    BETTER_AUTH_URL: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(32),
     LINE_LOGIN_CHANNEL_ID: z.string().min(1),
     LINE_LOGIN_CHANNEL_SECRET: z.string().min(1),
     OA_PLUS_API_KEY: z.string().min(1),
     LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN: z.string().min(1),
     LINE_ADMIN_BOT_CHANNEL_SECRET: z.string().min(1),
+    LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN: z.string().min(1),
+    LINE_CUSTOMER_PROD_BOT_CHANNEL_SECRET: z.string().min(1),
+    LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN: z.string().min(1),
+    LINE_CUSTOMER_TEST_BOT_CHANNEL_SECRET: z.string().min(1),
+    ENABLE_TEST_MODE: z.enum(["true", "false"]).default("false"),
+    DEV_TEST_USER_ID: z.string().optional(),
     ADMIN_LINE_UID: z.string().optional(),
     CRON_SECRET: z.string().min(1),
   },
@@ -29,7 +35,9 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
+    NEXT_PUBLIC_VERCEL_ENV: z.enum(["production", "preview", "development"]).default("development"),
   },
 
   /**
@@ -37,6 +45,9 @@ export const env = createEnv({
    * middlewares) or client-side so we need to destruct manually.
    */
   runtimeEnv: {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_VERCEL_ENV: process.env.NEXT_PUBLIC_VERCEL_ENV,
     NODE_ENV: process.env.NODE_ENV,
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
     SUPABASE_URL: process.env.SUPABASE_URL,
@@ -49,6 +60,12 @@ export const env = createEnv({
     OA_PLUS_API_KEY: process.env.OA_PLUS_API_KEY,
     LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN: process.env.LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN,
     LINE_ADMIN_BOT_CHANNEL_SECRET: process.env.LINE_ADMIN_BOT_CHANNEL_SECRET,
+    LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN: process.env.LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN,
+    LINE_CUSTOMER_PROD_BOT_CHANNEL_SECRET: process.env.LINE_CUSTOMER_PROD_BOT_CHANNEL_SECRET,
+    LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN: process.env.LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN,
+    LINE_CUSTOMER_TEST_BOT_CHANNEL_SECRET: process.env.LINE_CUSTOMER_TEST_BOT_CHANNEL_SECRET,
+    ENABLE_TEST_MODE: process.env.ENABLE_TEST_MODE,
+    DEV_TEST_USER_ID: process.env.DEV_TEST_USER_ID,
     ADMIN_LINE_UID: process.env.ADMIN_LINE_UID,
     CRON_SECRET: process.env.CRON_SECRET,
   },

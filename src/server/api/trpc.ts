@@ -108,6 +108,12 @@ const authMiddleware = t.middleware(async ({ ctx, next }) => {
   if (!ctx.session?.user) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
+  if (ctx.session.user.banned) {
+    throw new TRPCError({ 
+      code: "FORBIDDEN", 
+      message: ctx.session.user.banReason ?? "Account is suspended" 
+    });
+  }
   return next({
     ctx: {
       session: ctx.session,

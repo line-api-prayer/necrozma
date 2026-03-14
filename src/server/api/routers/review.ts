@@ -6,6 +6,8 @@ import {
   sendApprovalNotification,
   sendRejectionNotification,
 } from "~/server/lib/line/messaging-client";
+import { env } from "~/env.js";
+import { pool } from "~/server/db/pg";
 
 export const reviewRouter = createTRPCRouter({
   approve: adminProcedure
@@ -24,15 +26,16 @@ export const reviewRouter = createTRPCRouter({
         throw new Error("Order must be in UPLOADED status to approve");
       }
 
-      // Get evidence photo for the notification
+      // Get evidence photo and video for the notification
       const { data: evidenceRows } = await supabase
         .from("evidence")
         .select("public_url, type")
         .eq("order_id", input.orderId)
-        .eq("type", "photo")
-        .limit(1);
+        .in("type", ["photo", "video"]);
 
-      const photoUrl = (evidenceRows?.[0] as { public_url: string } | undefined)
+      const photoUrl = (evidenceRows?.find((r) => r.type === "photo") as { public_url: string } | undefined)
+        ?.public_url;
+      const videoUrl = (evidenceRows?.find((r) => r.type === "video") as { public_url: string } | undefined)
         ?.public_url;
 
       const { error: updateError } = await supabase
@@ -46,6 +49,27 @@ export const reviewRouter = createTRPCRouter({
 
       if (updateError) throw new Error(updateError.message);
 
+      // Notify the staff who uploaded the evidence
+      const { data: uploadInfo } = await supabase
+        .from("evidence")
+        .select("uploaded_by")
+        .eq("order_id", input.orderId)
+        .eq("type", "photo")
+        .single();
+
+      if (uploadInfo?.uploaded_by) {
+        await pool.query(
+          "INSERT INTO public.notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)",
+          [
+            uploadInfo.uploaded_by,
+            "✅ อนุมัติหลักฐานเรียบร้อย",
+            `คำสั่งซื้อ ${order.line_order_no} ได้รับการอนุมัติแล้ว`,
+            "success",
+            `/staff`,
+          ]
+        );
+      }
+
       // Mark as shipped on LINE Shop
       try {
         await markAsShip(order.line_order_no as string);
@@ -54,16 +78,17 @@ export const reviewRouter = createTRPCRouter({
       }
 
       // Send LINE push notification to customer
-      if (order.customer_line_uid) {
+      if (order.customer_line_uid || (env.ENABLE_TEST_MODE === "true" && env.DEV_TEST_USER_ID)) {
         try {
           await sendApprovalNotification(
-            order.customer_line_uid as string,
+            (order.customer_line_uid ?? "test-uid") as string,
             {
               lineOrderNo: order.line_order_no as string,
               customerName: order.customer_name as string,
               totalPrice: Number(order.total_price),
             },
             photoUrl,
+            videoUrl,
           );
         } catch (e) {
           console.error("Failed to send LINE approval notification:", e);
@@ -109,13 +134,34 @@ export const reviewRouter = createTRPCRouter({
 
       if (updateError) throw new Error(updateError.message);
 
+      // Notify the staff who uploaded the evidence before deleting it
+      const { data: uploadInfo } = await supabase
+        .from("evidence")
+        .select("uploaded_by")
+        .eq("order_id", input.orderId)
+        .eq("type", "photo")
+        .single();
+
+      if (uploadInfo?.uploaded_by) {
+        await pool.query(
+          "INSERT INTO public.notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)",
+          [
+            uploadInfo.uploaded_by,
+            "❌ หลักฐานถูกส่งกลับแก้ไข",
+            `คำสั่งซื้อ ${order.line_order_no} ถูกปฏิเสธ: ${input.reason}`,
+            "error",
+            `/staff/order/${order.line_order_no}`,
+          ]
+        );
+      }
+
       await supabase.from("evidence").delete().eq("order_id", input.orderId);
 
       // Send LINE push notification to customer
-      if (order.customer_line_uid) {
+      if (order.customer_line_uid || (env.ENABLE_TEST_MODE === "true" && env.DEV_TEST_USER_ID)) {
         try {
           await sendRejectionNotification(
-            order.customer_line_uid as string,
+            (order.customer_line_uid ?? "test-uid") as string,
             {
               lineOrderNo: order.line_order_no as string,
               customerName: order.customer_name as string,

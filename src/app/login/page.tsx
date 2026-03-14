@@ -1,21 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "~/server/lib/auth-client";
+import { env } from "~/env.js";
 import styles from "./login.module.css";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@test.com");
-  const [password, setPassword] = useState("password123");
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [lineLoading, setLineLoading] = useState(false);
 
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (err === "banned") {
+      setError("บัญชีของคุณถูกระงับ หรืออยู่ระหว่างรอการอนุมัติจากแอดมิน");
+    }
+  }, [searchParams]);
+
   const handleLineLogin = async () => {
     setLineLoading(true);
-    await authClient.signIn.social({ provider: "line" });
+    const callbackURL = searchParams.get("callbackUrl");
+    
+    await authClient.signIn.social({ 
+      provider: "line",
+      callbackURL: callbackURL ?? undefined
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,7 +49,14 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect based on role
+      // Redirect based on callbackUrl or role
+      const callbackURL = searchParams.get("callbackUrl");
+      
+      if (callbackURL) {
+        router.push(callbackURL);
+        return;
+      }
+
       const session = await authClient.getSession();
       const role = session.data?.user?.role;
 
@@ -71,8 +92,37 @@ export default function LoginPage() {
         </button>
 
         <div className={styles.divider}>
-          <span>หรือ</span>
+          <span>หรือเข้าสู่ระบบด้วยอีเมล</span>
         </div>
+
+        {(env.NEXT_PUBLIC_VERCEL_ENV === "preview" ||
+          env.NEXT_PUBLIC_VERCEL_ENV === "development" ||
+          process.env.NODE_ENV === "development") && (
+          <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+            <button
+              type="button"
+              className={styles.submitButton}
+              style={{ backgroundColor: "#374151" }}
+              onClick={() => {
+                setEmail("admin@test.com");
+                setPassword("password123");
+              }}
+            >
+              Test Admin
+            </button>
+            <button
+              type="button"
+              className={styles.submitButton}
+              style={{ backgroundColor: "#374151" }}
+              onClick={() => {
+                setEmail("staff@test.com");
+                setPassword("password123");
+              }}
+            >
+              Test Staff
+            </button>
+          </div>
+        )}
 
         <form className={styles.form} onSubmit={handleSubmit}>
           {error && <div className={styles.error}>{error}</div>}
@@ -117,5 +167,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

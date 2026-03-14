@@ -4,6 +4,8 @@ import { orderRouter } from "~/server/api/routers/order";
 import { reviewRouter } from "~/server/api/routers/review";
 import { evidenceRouter } from "~/server/api/routers/evidence";
 import { reportRouter } from "~/server/api/routers/report";
+import { mappingRouter } from "~/server/api/routers/mapping";
+import { userRouter } from "~/server/api/routers/user";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
 /**
@@ -18,6 +20,8 @@ export const appRouter = createTRPCRouter({
   review: reviewRouter,
   evidence: evidenceRouter,
   report: reportRouter,
+  mapping: mappingRouter,
+  user: userRouter,
 });
 
 // export type definition of API

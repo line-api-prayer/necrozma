@@ -20,10 +20,15 @@ export function middleware(request: NextRequest) {
   }
 
   // Check for Better Auth session cookie
+  // Note: In production (HTTPS), Better Auth prefixes cookies with __Secure- or __Host-
+  const allCookies = request.cookies.getAll().map(c => c.name);
   const sessionToken =
-    request.cookies.get("better-auth.session_token")?.value;
+    request.cookies.get("better-auth.session_token")?.value ??
+    request.cookies.get("__Secure-better-auth.session_token")?.value ??
+    request.cookies.get("__Host-better-auth.session_token")?.value;
 
   if (!sessionToken && (pathname.startsWith("/admin") || pathname.startsWith("/staff"))) {
+    console.log(`[Middleware] No session found for ${pathname}. Available cookies:`, allCookies);
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);

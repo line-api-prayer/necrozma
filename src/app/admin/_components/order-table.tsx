@@ -7,15 +7,35 @@ import styles from "./order-table.module.css";
 
 type StatusFilter = "ALL" | "PENDING" | "UPLOADED" | "COMPLETED";
 
+interface ProductMapping {
+  id: string;
+  original_name: string;
+  display_name: string;
+}
+
 export function OrderTable({
   orders,
+  mappings,
   onReview,
 }: {
   orders: OrderWithItems[];
+  mappings?: ProductMapping[];
   onReview: (order: OrderWithItems) => void;
 }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+
+  const getDisplayName = (originalName: string) => {
+    if (!mappings) return originalName;
+    
+    // Normalize function: trim and collapse multiple spaces to one
+    const normalize = (s: string) => s.trim().replace(/\s+/g, " ");
+    
+    const target = normalize(originalName);
+    const mapping = mappings.find((m) => normalize(m.original_name) === target);
+    
+    return mapping ? mapping.display_name : originalName;
+  };
 
   const filtered = orders.filter((o) => {
     if (statusFilter !== "ALL" && o.internalStatus !== statusFilter) return false;
@@ -120,7 +140,7 @@ export function OrderTable({
                           {order.items[0].sku ?? "-"}
                         </span>
                         <span className={styles.packageName}>
-                          {order.items[0].name}
+                          {getDisplayName(order.items[0].name)}
                         </span>
                       </>
                     )}

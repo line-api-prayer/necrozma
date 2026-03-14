@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, staffProcedure } from "~/server/api/trpc";
 import { supabaseClient } from "~/server/db/supabase";
+import { adminClient } from "~/server/lib/line/messaging-client";
+import { env } from "~/env.js";
 
 export const evidenceRouter = createTRPCRouter({
   getUploadUrl: staffProcedure
@@ -58,16 +60,35 @@ export const evidenceRouter = createTRPCRouter({
 
       // If this is a photo upload, set order status to UPLOADED
       if (input.type === "photo") {
-        const { error: updateError } = await supabase
+        const { data: orderData, error: updateError } = await supabase
           .from("orders")
           .update({
             internal_status: "UPLOADED",
             rejection_reason: null,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", input.orderId);
+          .eq("id", input.orderId)
+          .select("line_order_no, customer_name")
+          .single();
 
         if (updateError) throw new Error(updateError.message);
+
+        // Notify Admin that a new proof is ready for review
+        if (env.ADMIN_LINE_UID) {
+          try {
+            await adminClient.pushMessage({
+              to: env.ADMIN_LINE_UID,
+              messages: [
+                {
+                  type: "text",
+                  text: `🔔 มีหลักฐานใหม่ถูกอัพโหลดโดยพนักงาน\nคำสั่งซื้อ: ${orderData.line_order_no}\nลูกค้า: ${orderData.customer_name}\n\nกรุณาเข้าสู่ระบบเพื่อตรวจสอบและอนุมัติ: ${process.env.APP_URL ?? "https://admin.yourdomain.com"}`,
+                },
+              ],
+            });
+          } catch (e) {
+            console.error("Failed to notify admin of new proof upload:", e);
+          }
+        }
       }
 
       return { success: true, publicUrl: urlData.publicUrl };
