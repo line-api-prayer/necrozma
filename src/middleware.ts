@@ -28,7 +28,7 @@ export function middleware(request: NextRequest) {
     request.cookies.get("__Host-better-auth.session_token")?.value;
 
   if (!sessionToken && (pathname.startsWith("/admin") || pathname.startsWith("/staff"))) {
-    console.log(`[Middleware] No session found for ${pathname}. Available cookies:`, allCookies);
+    console.log("[Middleware] No session found for %s. Available cookies:", pathname, allCookies);
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
