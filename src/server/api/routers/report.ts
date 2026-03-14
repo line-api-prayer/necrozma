@@ -13,7 +13,7 @@ export const reportRouter = createTRPCRouter({
       // or we can just call it with a fake admin UID if we don't want to send.
       
       // Actually, let's just use the shared logic by importing it
-      const result = await generateAndSendDailySummary(input.date);
+      await generateAndSendDailySummary(input.date);
       
       // The shared function already uploads to storage. 
       // We just need to get the URLs back.
