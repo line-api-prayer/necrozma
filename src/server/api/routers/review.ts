@@ -7,6 +7,7 @@ import {
   sendRejectionNotification,
 } from "~/server/lib/line/messaging-client";
 import { env } from "~/env.js";
+import { pool } from "~/server/db/pg";
 
 export const reviewRouter = createTRPCRouter({
   approve: adminProcedure
@@ -47,6 +48,27 @@ export const reviewRouter = createTRPCRouter({
         .eq("id", input.orderId);
 
       if (updateError) throw new Error(updateError.message);
+
+      // Notify the staff who uploaded the evidence
+      const { data: uploadInfo } = await supabase
+        .from("evidence")
+        .select("uploaded_by")
+        .eq("order_id", input.orderId)
+        .eq("type", "photo")
+        .single();
+
+      if (uploadInfo?.uploaded_by) {
+        await pool.query(
+          "INSERT INTO public.notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)",
+          [
+            uploadInfo.uploaded_by,
+            "✅ อนุมัติหลักฐานเรียบร้อย",
+            `คำสั่งซื้อ ${order.line_order_no} ได้รับการอนุมัติแล้ว`,
+            "success",
+            `/staff`,
+          ]
+        );
+      }
 
       // Mark as shipped on LINE Shop
       try {
@@ -111,6 +133,27 @@ export const reviewRouter = createTRPCRouter({
         .eq("id", input.orderId);
 
       if (updateError) throw new Error(updateError.message);
+
+      // Notify the staff who uploaded the evidence before deleting it
+      const { data: uploadInfo } = await supabase
+        .from("evidence")
+        .select("uploaded_by")
+        .eq("order_id", input.orderId)
+        .eq("type", "photo")
+        .single();
+
+      if (uploadInfo?.uploaded_by) {
+        await pool.query(
+          "INSERT INTO public.notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)",
+          [
+            uploadInfo.uploaded_by,
+            "❌ หลักฐานถูกส่งกลับแก้ไข",
+            `คำสั่งซื้อ ${order.line_order_no} ถูกปฏิเสธ: ${input.reason}`,
+            "error",
+            `/staff/order/${order.line_order_no}`,
+          ]
+        );
+      }
 
       await supabase.from("evidence").delete().eq("order_id", input.orderId);
 
