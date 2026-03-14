@@ -41,8 +41,8 @@
     "swagger-ui-react": "^5.32.0",
     "vercel": "^50.32.5",
     "zod": "^3.24.2"
-    },
-    "devDependencies": {
+  },
+  "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@playwright/test": "^1.58.2",
     "@testing-library/dom": "^10.4.1",
@@ -58,8 +58,8 @@
     "eslint": "^9.23.0",
     "eslint-config-next": "15.5.7",
     "jsdom": "^28.1.0",
-
     "prettier": "^3.5.3",
+    "turbo": "^2.8.17",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.27.0",
     "vitest": "^4.0.18"
