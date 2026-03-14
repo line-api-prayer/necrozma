@@ -2,6 +2,7 @@ import { type WebhookEvent } from "@line/bot-sdk";
 import { supabaseClient } from "~/server/db/supabase";
 import { generateAndSendDailySummary } from "~/server/lib/daily-summary";
 import { syncOrdersForDate } from "~/server/lib/order-sync";
+import { adminClient, client } from "~/server/lib/line/messaging-client";
 
 /**
  * Parse a 6-digit Thai date string (DDMMYY where YY is Buddhist Era)
@@ -55,7 +56,7 @@ async function syncAndSendSummary(targetDate: string | undefined, lineUid: strin
   await generateAndSendDailySummary(targetDate, lineUid);
 }
 
-export async function handleWebhookEvents(events: WebhookEvent[]) {
+export async function handleWebhookEvents(events: WebhookEvent[], botType: "admin" | "customer" = "admin") {
   for (const event of events) {
     try {
       switch (event.type) {
@@ -63,7 +64,7 @@ export async function handleWebhookEvents(events: WebhookEvent[]) {
           await handleFollow(event);
           break;
         case "message":
-          await handleMessage(event);
+          await handleMessage(event, botType);
           break;
       }
     } catch (err) {
@@ -72,11 +73,28 @@ export async function handleWebhookEvents(events: WebhookEvent[]) {
   }
 }
 
-async function handleMessage(event: WebhookEvent & { type: "message" }) {
+async function handleMessage(event: WebhookEvent & { type: "message" }, botType: "admin" | "customer") {
   if (event.message.type !== "text") return;
   const text = event.message.text.trim();
   const lineUid = event.source.userId;
   if (!lineUid) return;
+
+  // Simple "my id" command to get user's LINE UID
+  if (text.toLowerCase() === "my id" || text.toLowerCase() === "id") {
+    const messagingClient = botType === "admin" ? adminClient : client;
+    try {
+      await messagingClient.replyMessage({
+        replyToken: event.replyToken,
+        messages: [{ type: "text", text: `Your LINE User ID is:\n${lineUid}` }],
+      });
+      console.log(`[LINE Webhook] Replied with ID to user: ${lineUid}`);
+      return;
+    } catch (e) {
+      console.error(`[LINE Webhook] Failed to reply with ID:`, e);
+      // Fallback: log to console at least
+      console.log(`[USER ID RECOVERY] User ID for sender is: ${lineUid}`);
+    }
+  }
 
   if (text.startsWith("สรุปรายวัน")) {
     // "สรุปรายวัน" with optional date argument like "สรุปรายวัน 060669"

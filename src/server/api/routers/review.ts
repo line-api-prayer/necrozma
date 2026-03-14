@@ -6,6 +6,7 @@ import {
   sendApprovalNotification,
   sendRejectionNotification,
 } from "~/server/lib/line/messaging-client";
+import { env } from "~/env.js";
 
 export const reviewRouter = createTRPCRouter({
   approve: adminProcedure
@@ -55,10 +56,10 @@ export const reviewRouter = createTRPCRouter({
       }
 
       // Send LINE push notification to customer
-      if (order.customer_line_uid) {
+      if (order.customer_line_uid || (env.ENABLE_TEST_MODE === "true" && env.DEV_TEST_USER_ID)) {
         try {
           await sendApprovalNotification(
-            order.customer_line_uid as string,
+            (order.customer_line_uid ?? "test-uid") as string,
             {
               lineOrderNo: order.line_order_no as string,
               customerName: order.customer_name as string,
@@ -114,10 +115,10 @@ export const reviewRouter = createTRPCRouter({
       await supabase.from("evidence").delete().eq("order_id", input.orderId);
 
       // Send LINE push notification to customer
-      if (order.customer_line_uid) {
+      if (order.customer_line_uid || (env.ENABLE_TEST_MODE === "true" && env.DEV_TEST_USER_ID)) {
         try {
           await sendRejectionNotification(
-            order.customer_line_uid as string,
+            (order.customer_line_uid ?? "test-uid") as string,
             {
               lineOrderNo: order.line_order_no as string,
               customerName: order.customer_name as string,

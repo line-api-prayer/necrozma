@@ -87,6 +87,9 @@ export default function Admin() {
             <span className={styles.logoText}>ฝากใส่บาตร Admin</span>
           </div>
           <div className={styles.userSection}>
+            <Link href="/admin/users" className={styles.filterButton} style={{ textDecoration: "none" }}>
+              👥 จัดการ User
+            </Link>
             <Link href="/admin/mappings" className={styles.filterButton} style={{ textDecoration: "none" }}>
               ⚙️ จัดการ Mapping
             </Link>

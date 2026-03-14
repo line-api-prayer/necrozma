@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "~/server/lib/auth-client";
+import { env } from "~/env.js";
 import styles from "./login.module.css";
 
 export default function LoginPage() {
@@ -88,7 +89,9 @@ export default function LoginPage() {
           <span>หรือเข้าสู่ระบบด้วยอีเมล</span>
         </div>
 
-        {process.env.NODE_ENV === "development" && (
+        {(env.NEXT_PUBLIC_VERCEL_ENV === "preview" ||
+          env.NEXT_PUBLIC_VERCEL_ENV === "development" ||
+          process.env.NODE_ENV === "development") && (
           <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
             <button
               type="button"

@@ -81,11 +81,11 @@ export default function MappingsPage() {
 
   // --- Delete ---
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this mapping?")) return;
+    if (!confirm("ยืนยันการลบการตั้งค่านี้?")) return;
     try {
       await deleteMutation.mutateAsync({ id });
     } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : "Something went wrong"}`);
+      alert(`เกิดข้อผิดพลาด: ${err instanceof Error ? err.message : "บางอย่างผิดพลาด"}`);
     }
   };
 
@@ -96,14 +96,14 @@ export default function MappingsPage() {
         <div className={styles.breadcrumb}>
           <Link href="/admin" className={styles.breadcrumbLink}>Admin</Link>
           <span className={styles.breadcrumbSep}>›</span>
-          <span>Product Mappings</span>
+          <span>จัดการชื่อสินค้า (Mapping)</span>
         </div>
         <h1 className={styles.title}>
           <span className={styles.titleIcon}>⚙️</span>
-          Product Display Mappings
+          การตั้งค่าชื่อสินค้าสำหรับรายงาน
         </h1>
         <p className={styles.subtitle}>
-          Map long LINE API product names to short, readable display names used in summaries and PDF reports.
+          แปลงชื่อสินค้าที่ยาวจาก LINE API ให้เป็นชื่อที่สั้นและอ่านง่ายสำหรับใช้ในสรุปยอดและรายงาน PDF
         </p>
       </header>
 
@@ -113,29 +113,29 @@ export default function MappingsPage() {
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <span className={styles.cardIcon}>＋</span>
-              <h2 className={styles.cardTitle}>Add Mapping</h2>
+              <h2 className={styles.cardTitle}>เพิ่มการตั้งค่า</h2>
             </div>
             <form onSubmit={handleAdd} className={styles.form}>
               <div className={styles.field}>
-                <label className={styles.label}>LINE API Name (exact)</label>
+                <label className={styles.label}>ชื่อสินค้าจาก LINE API (ต้องตรงกัน)</label>
                 <textarea
                   className={styles.textarea}
                   value={newOriginal}
                   onChange={(e) => setNewOriginal(e.target.value)}
-                  placeholder="e.g. ใส่บาตร ชุด S  ร่ำรวย"
+                  placeholder="เช่น ใส่บาตร ชุด S  ร่ำรวย"
                   rows={2}
                   required
                 />
-                <span className={styles.hint}>Copy-paste from LINE to avoid spacing issues</span>
+                <span className={styles.hint}>แนะนำให้คัดลอกและวางจาก LINE โดยตรงเพื่อป้องกันปัญหาเว้นวรรค</span>
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>Display Name</label>
+                <label className={styles.label}>ชื่อที่จะให้แสดงผล</label>
                 <input
                   type="text"
                   className={styles.input}
                   value={newDisplay}
                   onChange={(e) => setNewDisplay(e.target.value)}
-                  placeholder="e.g. ใส่บาตรชุด S"
+                  placeholder="เช่น ใส่บาตรชุด S"
                   required
                 />
               </div>
@@ -143,7 +143,7 @@ export default function MappingsPage() {
                 {isAdding ? (
                   <span className={styles.spinner} />
                 ) : (
-                  "Save Mapping"
+                  "บันทึกการตั้งค่า"
                 )}
               </button>
             </form>
@@ -152,7 +152,7 @@ export default function MappingsPage() {
           <div className={styles.statsCard}>
             <div className={styles.stat}>
               <span className={styles.statNum}>{mappings.length}</span>
-              <span className={styles.statLabel}>Total Mappings</span>
+              <span className={styles.statLabel}>รายการทั้งหมด</span>
             </div>
           </div>
         </aside>
@@ -162,7 +162,7 @@ export default function MappingsPage() {
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <span className={styles.cardIcon}>↔</span>
-              <h2 className={styles.cardTitle}>Existing Mappings</h2>
+              <h2 className={styles.cardTitle}>รายการที่มีอยู่</h2>
             </div>
 
             {mappingsQuery.isLoading ? (
@@ -173,17 +173,17 @@ export default function MappingsPage() {
               </div>
             ) : mappings.length === 0 ? (
               <div className={styles.empty}>
-                <p>No mappings yet.</p>
-                <p>Add your first mapping using the form.</p>
+                <p>ยังไม่มีการตั้งค่า</p>
+                <p>เพิ่มการตั้งค่าแรกของคุณโดยใช้แบบฟอร์มด้านข้าง</p>
               </div>
             ) : (
               <div className={styles.tableWrapper}>
                 <table className={styles.table}>
                   <thead>
                     <tr>
-                      <th className={styles.th}>LINE API Name</th>
-                      <th className={styles.th}>Display Name</th>
-                      <th className={styles.th} style={{ width: "140px" }}>Actions</th>
+                      <th className={styles.th}>ชื่อสินค้าจาก LINE API</th>
+                      <th className={styles.th}>ชื่อที่แสดงผล</th>
+                      <th className={styles.th} style={{ width: "140px" }}>ดำเนินการ</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -214,10 +214,10 @@ export default function MappingsPage() {
                                 className={styles.saveBtn}
                                 disabled={upsertMutation.isPending}
                               >
-                                {upsertMutation.isPending ? "…" : "Save"}
+                                {upsertMutation.isPending ? "…" : "บันทึก"}
                               </button>
                               <button onClick={cancelEdit} className={styles.cancelBtn}>
-                                Cancel
+                                ยกเลิก
                               </button>
                             </div>
                           </td>
@@ -237,7 +237,7 @@ export default function MappingsPage() {
                                 onClick={() => startEdit(m)}
                                 className={styles.editBtn}
                               >
-                                ✏️ Edit
+                                ✏️ แก้ไข
                               </button>
                               <button
                                 onClick={() => handleDelete(m.id)}

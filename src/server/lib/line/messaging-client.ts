@@ -1,10 +1,11 @@
 import { messagingApi } from "@line/bot-sdk";
 import { env } from "~/env.js";
 
-const customerChannelAccessToken =
-  process.env.NODE_ENV === "production"
-    ? env.LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN
-    : env.LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN;
+const isTestMode = env.ENABLE_TEST_MODE === "true";
+
+const customerChannelAccessToken = isTestMode
+  ? env.LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN
+  : env.LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN;
 
 export const client = new messagingApi.MessagingApiClient({
   channelAccessToken: customerChannelAccessToken,
@@ -33,12 +34,12 @@ export async function sendApprovalNotification(
   }
 
   const targetUserId =
-    process.env.NODE_ENV === "development" && env.DEV_TEST_USER_ID
-      ? env.DEV_TEST_USER_ID
-      : lineUid;
+    isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
 
-  if (process.env.NODE_ENV === "development" && env.DEV_TEST_USER_ID) {
-    console.warn(`[DEV MODE] Redirecting approval message from ${lineUid} to ${targetUserId}`);
+  if (isTestMode && env.DEV_TEST_USER_ID) {
+    console.warn(
+      `[TEST MODE] Redirecting approval message from ${lineUid} to ${targetUserId}`,
+    );
   }
 
   await client.pushMessage({
@@ -53,12 +54,12 @@ export async function sendRejectionNotification(
   reason: string,
 ) {
   const targetUserId =
-    process.env.NODE_ENV === "development" && env.DEV_TEST_USER_ID
-      ? env.DEV_TEST_USER_ID
-      : lineUid;
+    isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
 
-  if (process.env.NODE_ENV === "development" && env.DEV_TEST_USER_ID) {
-    console.warn(`[DEV MODE] Redirecting rejection message from ${lineUid} to ${targetUserId}`);
+  if (isTestMode && env.DEV_TEST_USER_ID) {
+    console.warn(
+      `[TEST MODE] Redirecting rejection message from ${lineUid} to ${targetUserId}`,
+    );
   }
 
   await client.pushMessage({
@@ -128,12 +129,12 @@ export async function sendDailySummaryToAdmin(
   messageText += `CSV: ${csvUrl}`;
 
   const targetUserId =
-    process.env.NODE_ENV === "development" && env.DEV_TEST_USER_ID
-      ? env.DEV_TEST_USER_ID
-      : adminLineUid;
+    isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : adminLineUid;
 
-  if (process.env.NODE_ENV === "development" && env.DEV_TEST_USER_ID) {
-    console.warn(`[DEV MODE] Redirecting daily summary from admin ${adminLineUid} to ${targetUserId}`);
+  if (isTestMode && env.DEV_TEST_USER_ID) {
+    console.warn(
+      `[TEST MODE] Redirecting daily summary from admin ${adminLineUid} to ${targetUserId}`,
+    );
   }
 
   await adminClient.pushMessage({
