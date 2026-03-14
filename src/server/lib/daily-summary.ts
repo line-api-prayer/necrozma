@@ -123,24 +123,25 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
   const nocacheCsvUrl = `${csvUrl.publicUrl}?v=${timestamp}`;
 
   // Send to admin via LINE
-  const adminIdToSend = customAdminUid ?? env.ADMIN_LINE_UID;
-  if (adminIdToSend) {
-    try {
-      await sendDailySummaryToAdmin(
-        adminIdToSend,
-        {
-          date: today,
-          totalOrders: orders.length,
-          totalRevenue: totalRevenue,
-          items: reportData.items,
-          orders: reportData.orderNumbers,
-        },
-        nocachePdfUrl,
-        nocacheCsvUrl,
-      );
-    } catch (e) {
-      console.error("Failed to send daily summary via LINE:", e);
-      throw e;
+  const adminsToSend = customAdminUid ? [customAdminUid] : env.ADMIN_LINE_UID;
+  if (adminsToSend && adminsToSend.length > 0) {
+    for (const adminId of adminsToSend) {
+      try {
+        await sendDailySummaryToAdmin(
+          adminId,
+          {
+            date: today,
+            totalOrders: orders.length,
+            totalRevenue: totalRevenue,
+            items: reportData.items,
+            orders: reportData.orderNumbers,
+          },
+          nocachePdfUrl,
+          nocacheCsvUrl,
+        );
+      } catch (e) {
+        console.error("Failed to send daily summary via LINE to admin %s:", adminId, e);
+      }
     }
   }
 

@@ -25,7 +25,7 @@ export const env = createEnv({
     LINE_CUSTOMER_TEST_BOT_CHANNEL_SECRET: z.string().min(1),
     ENABLE_TEST_MODE: z.enum(["true", "false"]).default("false"),
     DEV_TEST_USER_ID: z.string().optional(),
-    ADMIN_LINE_UID: z.string().optional(),
+    ADMIN_LINE_UID: z.string().optional().transform((val) => val ? val.split(",") : []),
     CRON_SECRET: z.string().min(1),
   },
 
