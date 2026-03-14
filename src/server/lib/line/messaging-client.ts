@@ -3,9 +3,9 @@ import { env } from "~/env.js";
 
 const isTestMode = env.ENABLE_TEST_MODE === "true";
 
-const customerChannelAccessToken = isTestMode
+const customerChannelAccessToken = (isTestMode
   ? env.LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN
-  : env.LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN;
+  : env.LINE_CUSTOMER_PROD_BOT_CHANNEL_ACCESS_TOKEN) ?? "";
 
 export const client = new messagingApi.MessagingApiClient({
   channelAccessToken: customerChannelAccessToken,

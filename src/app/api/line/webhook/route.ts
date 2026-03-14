@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
 
-    let channelSecret = "";
+    let channelSecret: string | undefined = "";
     if (botType === "admin") {
       channelSecret = env.LINE_ADMIN_BOT_CHANNEL_SECRET;
     } else {
@@ -77,6 +77,11 @@ export async function POST(request: NextRequest) {
         process.env.NODE_ENV === "production"
           ? env.LINE_CUSTOMER_PROD_BOT_CHANNEL_SECRET
           : env.LINE_CUSTOMER_TEST_BOT_CHANNEL_SECRET;
+    }
+
+    if (!channelSecret) {
+      console.error(`[LINE ${botType}] Webhook called but channel secret is not configured.`);
+      return NextResponse.json({ error: "Bot channel secret not configured" }, { status: 500 });
     }
 
     // Use the official LINE bot SDK validateSignature method
