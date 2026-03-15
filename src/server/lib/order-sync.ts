@@ -1,4 +1,5 @@
 import { supabaseClient } from "~/server/db/supabase";
+import { env } from "~/env.js";
 import { listOrders } from "~/server/lib/line/shop-client";
 import { LINE_SHOP_ORDER_STATUSES } from "~/server/lib/line/types";
 import { sendServiceRequestPrompt } from "~/server/lib/line/messaging-client";
@@ -11,6 +12,7 @@ import { isServiceRequestComplete } from "~/server/lib/service-request";
  */
 export async function syncOrdersForDate(targetDate?: string): Promise<number> {
   const supabase = await supabaseClient();
+  const serviceRequestPromptsEnabled = env.ENABLE_SERVICE_REQUEST_PROMPTS === "true";
   let page = 1;
   let synced = 0;
 
@@ -83,7 +85,7 @@ export async function syncOrdersForDate(targetDate?: string): Promise<number> {
           prayerText: upsertedOrder.prayer_text as string | null,
         });
 
-      if (canPromptCustomer) {
+      if (canPromptCustomer && serviceRequestPromptsEnabled) {
         try {
           const sent = await sendServiceRequestPrompt(
             upsertedOrder.customer_line_uid as string | null,
@@ -104,6 +106,10 @@ export async function syncOrdersForDate(targetDate?: string): Promise<number> {
         } catch (error) {
           console.error(`Failed to send service request prompt for ${lineOrder.orderNo}:`, error);
         }
+      } else if (canPromptCustomer) {
+        console.log(
+          `[Order Sync] Skipping service request prompt for ${lineOrder.orderNo} because ENABLE_SERVICE_REQUEST_PROMPTS is false`,
+        );
       }
 
       synced++;
