@@ -28,6 +28,7 @@ vi.mock("@line/bot-sdk", async (importOriginal) => {
 // We need to mock environment variables internally so DEV_TEST_USER_ID overrides target or not.
 vi.mock("~/env.js", () => ({
   env: {
+    ENABLE_TEST_MODE: "true",
     DEV_TEST_USER_ID: "Utest-override-123",
     LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN: "mock-token",
     LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN: "mock-admin-token",
