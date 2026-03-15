@@ -154,4 +154,5 @@ Client variables:
 - For the service-request rollout, historical orders before the customer bot launch were marked as completed in the prompt flow. Missing-service-request queries should ignore rows where `service_request_completed_at` is already set.
 - Customer bot deep links depend on `BETTER_AUTH_URL` being a live public URL. Stale ngrok domains will break LINE links even if the token itself is valid.
 - When a Next.js page uses `useSearchParams()`, isolate it behind a `Suspense` boundary or read `searchParams` in the server page and pass the value down. `bun run build` will fail otherwise.
+- `bun run build` may fail in a network-restricted sandbox when `next/font` needs to fetch Google font metadata. Rerun with network access for verification, or replace remote fonts with local ones if offline builds become a requirement.
 - Before committing, run `bun run build` and verify the linked Vercel project still deploys successfully after the push.
