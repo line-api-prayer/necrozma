@@ -1,15 +1,24 @@
+.DS_Store
 .idea/
 .next/
 node_modules/
-.vercel
+.vercel/
 .env
 .env.local
+.env.development
+.env.production
+.env.test
+.env*.local
 .env.development.local
 .env.vercel
 .env.vercel.preview
 .env.vercel.prod
 .vercel_config/
 *.tsbuildinfo
+SaibahtOnline-CreateOutline.pdf
+test-output.pdf
+test-certificates.pdf
+scripts/diagnostics/output/
 
 # Turborepo
-.turbo
+.turbo/

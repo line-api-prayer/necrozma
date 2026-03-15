@@ -1,8 +1,9 @@
 import {
   generateCertificatePdfBuffer,
   generatePdfBuffer,
-} from "../src/server/lib/report-generator";
+} from "../../src/server/lib/report-generator";
 import fs from 'fs';
+import path from "path";
 
 const dummyData = {
   date: '2026-03-04',
@@ -65,11 +66,19 @@ const dummyData = {
 
 async function test() {
   try {
+    const outputDir = path.resolve(process.cwd(), "scripts/diagnostics/output");
+    fs.mkdirSync(outputDir, { recursive: true });
+
     const buffer = await generatePdfBuffer(dummyData as any);
     const certificateBuffer = await generateCertificatePdfBuffer(dummyData as any);
-    fs.writeFileSync('test-output.pdf', buffer);
-    fs.writeFileSync('test-certificates.pdf', certificateBuffer);
-    console.log('PDFs generated successfully, saved to test-output.pdf and test-certificates.pdf');
+    const summaryPath = path.join(outputDir, "test-output.pdf");
+    const certificatePath = path.join(outputDir, "test-certificates.pdf");
+
+    fs.writeFileSync(summaryPath, buffer);
+    fs.writeFileSync(certificatePath, certificateBuffer);
+    console.log(
+      `PDFs generated successfully, saved to ${summaryPath} and ${certificatePath}`,
+    );
   } catch (err) {
     console.error('Error generating PDF:', err);
   }

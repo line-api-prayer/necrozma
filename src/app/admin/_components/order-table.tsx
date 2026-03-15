@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "~/app/_components/badge";
+import { Badge } from "~/components/badge";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import styles from "./order-table.module.css";
 
