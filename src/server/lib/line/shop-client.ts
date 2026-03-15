@@ -3,6 +3,7 @@ import {
   type LineShopOrder,
   type LineShopOrderItem,
   type LineShopListResponse,
+  type LineShopOrderStatus,
 } from "./types";
 
 const BASE_URL = "https://developers-oaplus.line.biz/myshop/v1";
@@ -111,18 +112,19 @@ function toOrder(raw: RawOrder): LineShopOrder {
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export async function listOrders(params?: {
-  status?: string | string[];
+  status?: LineShopOrderStatus | readonly LineShopOrderStatus[];
   page?: number;
   perPage?: number;
   includeItems?: boolean;
 }): Promise<LineShopListResponse> {
   const searchParams = new URLSearchParams();
   
-  if (params?.status) {
-    if (Array.isArray(params.status)) {
-      params.status.forEach(status => searchParams.append("orderStatus", status));
+  const status = params?.status;
+  if (status) {
+    if (typeof status === "string") {
+      searchParams.append("orderStatus", status);
     } else {
-      searchParams.append("orderStatus", params.status);
+      status.forEach((orderStatus) => searchParams.append("orderStatus", orderStatus));
     }
   }
   

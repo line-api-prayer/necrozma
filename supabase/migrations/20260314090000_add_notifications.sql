@@ -14,11 +14,14 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- Policies
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 CREATE POLICY "Users can view their own notifications" ON public.notifications
     FOR SELECT USING (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
 CREATE POLICY "Users can update their own notifications" ON public.notifications
     FOR UPDATE USING (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "System/Admin can insert notifications" ON public.notifications;
 CREATE POLICY "System/Admin can insert notifications" ON public.notifications
     FOR INSERT WITH CHECK (true);

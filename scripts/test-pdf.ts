@@ -1,4 +1,7 @@
-import { generatePdfBuffer } from './src/server/lib/report-generator';
+import {
+  generateCertificatePdfBuffer,
+  generatePdfBuffer,
+} from "../src/server/lib/report-generator";
 import fs from 'fs';
 
 const dummyData = {
@@ -63,8 +66,10 @@ const dummyData = {
 async function test() {
   try {
     const buffer = await generatePdfBuffer(dummyData as any);
+    const certificateBuffer = await generateCertificatePdfBuffer(dummyData as any);
     fs.writeFileSync('test-output.pdf', buffer);
-    console.log('PDF generated successfully, saved to test-output.pdf');
+    fs.writeFileSync('test-certificates.pdf', certificateBuffer);
+    console.log('PDFs generated successfully, saved to test-output.pdf and test-certificates.pdf');
   } catch (err) {
     console.error('Error generating PDF:', err);
   }

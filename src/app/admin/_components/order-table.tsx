@@ -92,11 +92,12 @@ export function OrderTable({
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>วันที่</th>
+              <th>วันดำเนินงาน</th>
               <th>เลขที่คำสั่งซื้อ</th>
               <th>สถานะ</th>
               <th>ลูกค้า</th>
               <th>แพ็กเกจ</th>
+              <th>คำขอพร</th>
               <th>ยอดเงิน</th>
               <th>ดำเนินการ</th>
             </tr>
@@ -105,10 +106,22 @@ export function OrderTable({
             {filtered.map((order) => (
               <tr key={order.id}>
                 <td>
-                  {new Date(order.orderDate).toLocaleDateString("th-TH", {
-                    day: "2-digit",
-                    month: "2-digit",
-                  })}
+                  <div className={styles.dateCell}>
+                    <span className={styles.serviceDate}>
+                      {order.requestedServiceDate
+                        ? new Date(order.requestedServiceDate).toLocaleDateString("th-TH", {
+                            day: "2-digit",
+                            month: "2-digit",
+                          })
+                        : "รอลูกค้ากรอก"}
+                    </span>
+                    <span className={styles.secondaryDate}>
+                      สั่งซื้อ {new Date(order.orderDate).toLocaleDateString("th-TH", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </span>
+                  </div>
                 </td>
                 <td>
                   <span className={styles.orderNo}>{order.lineOrderNo}</span>
@@ -145,6 +158,18 @@ export function OrderTable({
                       </>
                     )}
                   </div>
+                </td>
+                <td>
+                  {(() => {
+                    const prayerText = order.prayerText?.trim();
+                    return (
+                  <p className={styles.prayerText}>
+                    {prayerText && prayerText.length > 0
+                      ? prayerText
+                      : "รอลูกค้ากรอกคำขอพร"}
+                  </p>
+                    );
+                  })()}
                 </td>
                 <td>฿{Number(order.totalPrice).toLocaleString()}</td>
                 <td>

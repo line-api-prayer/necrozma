@@ -1,5 +1,8 @@
 import { supabaseClient } from "~/server/db/supabase";
 import { listOrders } from "~/server/lib/line/shop-client";
+import { LINE_SHOP_ORDER_STATUSES } from "~/server/lib/line/types";
+import { sendServiceRequestPrompt } from "~/server/lib/line/messaging-client";
+import { isServiceRequestComplete } from "~/server/lib/service-request";
 
 /**
  * Sync orders from LINE Shop API into the database.
@@ -13,7 +16,7 @@ export async function syncOrdersForDate(targetDate?: string): Promise<number> {
 
   while (true) {
     const response = await listOrders({
-      status: ["READY_TO_SHIP", "SHIPPED", "FINALIZED", "COMPLETED", "EXPIRED", "CANCELED"],
+      status: LINE_SHOP_ORDER_STATUSES,
       page,
       perPage: 50,
       includeItems: true,
@@ -47,7 +50,7 @@ export async function syncOrdersForDate(targetDate?: string): Promise<number> {
           },
           { onConflict: "line_order_no" },
         )
-        .select("id")
+        .select("id, line_order_no, customer_line_uid, requested_service_date, prayer_text, service_request_prompt_sent_at")
         .single();
 
       if (orderError || !upsertedOrder) {
@@ -71,6 +74,36 @@ export async function syncOrdersForDate(targetDate?: string): Promise<number> {
           variants: item.variants,
         }));
         await supabase.from("order_items").insert(itemRows);
+      }
+
+      const canPromptCustomer =
+        !upsertedOrder.service_request_prompt_sent_at &&
+        !isServiceRequestComplete({
+          requestedServiceDate: upsertedOrder.requested_service_date as string | null,
+          prayerText: upsertedOrder.prayer_text as string | null,
+        });
+
+      if (canPromptCustomer) {
+        try {
+          const sent = await sendServiceRequestPrompt(
+            upsertedOrder.customer_line_uid as string | null,
+            {
+              lineOrderNo: upsertedOrder.line_order_no as string,
+              customerName: lineOrder.customerName,
+            },
+          );
+
+          if (sent) {
+            await supabase
+              .from("orders")
+              .update({
+                service_request_prompt_sent_at: new Date().toISOString(),
+              })
+              .eq("id", orderId);
+          }
+        } catch (error) {
+          console.error(`Failed to send service request prompt for ${lineOrder.orderNo}:`, error);
+        }
       }
 
       synced++;

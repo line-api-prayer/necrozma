@@ -2,7 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   sendApprovalNotification,
+  sendDailySummaryToAdmin,
   sendRejectionNotification,
+  sendServiceRequestPrompt,
 } from "../messaging-client";
 
 const { pushMessageMock, broadcastMock } = vi.hoisted(() => ({
@@ -28,6 +30,7 @@ vi.mock("@line/bot-sdk", async (importOriginal) => {
 // We need to mock environment variables internally so DEV_TEST_USER_ID overrides target or not.
 vi.mock("~/env.js", () => ({
   env: {
+    ENABLE_TEST_MODE: "true",
     DEV_TEST_USER_ID: "Utest-override-123",
     LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN: "mock-token",
     LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN: "mock-admin-token",
@@ -38,6 +41,7 @@ describe("messaging-client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("BETTER_AUTH_SECRET", "test-secret");
   });
 
   it("should send an approval Flex Message & push a VideoMessage if videoUrl is supplied", async () => {
@@ -97,5 +101,51 @@ describe("messaging-client", () => {
     
     // Should include the custom reason
     expect(pushArgs?.messages[0]?.text).toContain("Missing name in video");
+  });
+
+  it("should send the admin daily summary as one flex message with three links", async () => {
+    await sendDailySummaryToAdmin(
+      "U-admin",
+      {
+        date: "2026-03-16",
+        totalOrders: 10,
+        totalRevenue: 1488,
+        items: [
+          { name: "ตักบาตร ชุด S", qty: 3, total: 144 },
+          { name: "ชุดตำนานถวายรายเดือน", qty: 7, total: 1344 },
+        ],
+        orders: ["2026030380252885", "2026030380252886"],
+      },
+      "https://example.com/summary.pdf",
+      "https://example.com/certificate.pdf",
+      "https://example.com/staff?date=2026-03-16",
+    );
+
+    expect(pushMessageMock).toHaveBeenCalledTimes(1);
+    const pushArgs = pushMessageMock.mock.calls[0]?.[0] as any;
+
+    expect(pushArgs?.to).toBe("Utest-override-123");
+    expect(pushArgs?.messages).toHaveLength(1);
+    expect(pushArgs?.messages[0]?.type).toBe("flex");
+    expect(pushArgs?.messages[0]?.contents?.footer?.contents).toHaveLength(3);
+  });
+
+  it("should send a customer service request prompt with a signed form link", async () => {
+    const sent = await sendServiceRequestPrompt("U-customer", {
+      lineOrderNo: "TEST-003",
+      customerName: "Mary Doe",
+    });
+
+    expect(sent).toBe(true);
+    expect(pushMessageMock).toHaveBeenCalledTimes(1);
+
+    const pushArgs = pushMessageMock.mock.calls[0]?.[0] as any;
+    expect(pushArgs?.to).toBe("Utest-override-123");
+    expect(pushArgs?.messages[0]?.type).toBe("flex");
+
+    const uri =
+      pushArgs?.messages[0]?.contents?.footer?.contents?.[0]?.action?.uri;
+    expect(uri).toContain("/service-request/TEST-003");
+    expect(uri).toContain("token=");
   });
 });

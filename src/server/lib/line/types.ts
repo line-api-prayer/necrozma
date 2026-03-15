@@ -1,8 +1,17 @@
 // ─── LINE Shop API Response Types ────────────────────────────────────────────
 
+export const LINE_SHOP_ORDER_STATUSES = [
+  "FINALIZED",
+  "COMPLETED",
+  "EXPIRED",
+  "CANCELED",
+] as const;
+
+export type LineShopOrderStatus = (typeof LINE_SHOP_ORDER_STATUSES)[number];
+
 export interface LineShopOrder {
   orderNo: string;
-  status: "FINALIZED" | "COMPLETED" | "EXPIRED" | "CANCELED";
+  status: LineShopOrderStatus;
   paymentStatus: string;
   paymentMethod: string;
   customerName: string;
@@ -52,7 +61,11 @@ export interface Order {
   discountAmount: number;
   totalPrice: number;
   remarkBuyer: string | null;
+  requestedServiceDate: string | null;
+  prayerText: string | null;
   rejectionReason: string | null;
+  serviceRequestPromptSentAt: string | null;
+  serviceRequestCompletedAt: string | null;
   syncedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -103,6 +116,7 @@ export interface DailySummary {
   pendingCount: number;
   uploadedCount: number;
   completedCount: number;
+  missingServiceRequestCount: number;
 }
 
 // ─── Supabase row helpers (snake_case) ──────────────────────────────────────
@@ -123,7 +137,11 @@ export interface OrderRow {
   discount_amount: number;
   total_price: number;
   remark_buyer: string | null;
+  requested_service_date: string | null;
+  prayer_text: string | null;
   rejection_reason: string | null;
+  service_request_prompt_sent_at: string | null;
+  service_request_completed_at: string | null;
   synced_at: string;
   created_at: string;
   updated_at: string;
@@ -181,7 +199,11 @@ export function toOrder(row: OrderRow): Order {
     discountAmount: row.discount_amount,
     totalPrice: row.total_price,
     remarkBuyer: row.remark_buyer,
+    requestedServiceDate: row.requested_service_date,
+    prayerText: row.prayer_text,
     rejectionReason: row.rejection_reason,
+    serviceRequestPromptSentAt: row.service_request_prompt_sent_at,
+    serviceRequestCompletedAt: row.service_request_completed_at,
     syncedAt: row.synced_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

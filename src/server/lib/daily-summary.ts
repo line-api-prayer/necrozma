@@ -1,10 +1,13 @@
 import { env } from "~/env.js";
 import { supabaseClient } from "~/server/db/supabase";
 import {
+  type ReportData,
   generatePdfBuffer,
-  generateCsvString,
+  generateCertificatePdfBuffer,
 } from "~/server/lib/report-generator";
+import { getStaffDashboardUrl } from "~/server/lib/app-links";
 import { sendDailySummaryToAdmin } from "~/server/lib/line/messaging-client";
+import { getThailandDateString } from "~/server/lib/operations-date";
 import {
   type OrderRow,
   type OrderItemRow,
@@ -15,16 +18,36 @@ import {
   toEvidence,
 } from "~/server/lib/line/types";
 
-export async function generateAndSendDailySummary(targetDateStr?: string, customAdminUid?: string) {
+type DailySummaryResult = {
+  ok: true;
+  date: string;
+  orderCount: number;
+  pdfUrl: string;
+  certificatePdfUrl: string;
+  dashboardUrl: string;
+};
+
+type DailySummaryPayload = {
+  summary: DailySummaryResult;
+  lineMessage: {
+    date: string;
+    totalOrders: number;
+    totalRevenue: number;
+    items: NonNullable<ReportData["items"]>;
+    orders: NonNullable<ReportData["orderNumbers"]>;
+  };
+};
+
+async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPayload> {
   const supabase = await supabaseClient();
 
-  // Use Thailand timezone for "today" or the provided date
-  const today = targetDateStr ?? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const today = targetDateStr ?? getThailandDateString();
 
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
     .select("*")
-    .eq("order_date", today);
+    .eq("requested_service_date", today)
+    .order("created_at", { ascending: false });
 
   if (ordersError) {
     throw new Error(ordersError.message);
@@ -81,7 +104,7 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
 
   const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total_price), 0);
   
-  const reportData = {
+  const reportData: ReportData = {
     date: today,
     orders: ordersWithItems,
     totalRevenue,
@@ -94,56 +117,86 @@ export async function generateAndSendDailySummary(targetDateStr?: string, custom
 
   // Generate and upload
   const pdfBuffer = await generatePdfBuffer(reportData);
-  const csvString = generateCsvString(reportData);
+  const certificatePdfBuffer = await generateCertificatePdfBuffer(reportData);
 
   const pdfPath = `${today}/daily-summary-${today}.pdf`;
-  const csvPath = `${today}/daily-summary-${today}.csv`;
+  const certificatePdfPath = `${today}/daily-certificates-${today}.pdf`;
 
   await Promise.all([
     supabase.storage.from("reports").upload(pdfPath, pdfBuffer, {
       contentType: "application/pdf",
       upsert: true,
     }),
-    supabase.storage.from("reports").upload(
-      csvPath,
-      new TextEncoder().encode(csvString),
-      { contentType: "text/csv", upsert: true },
-    ),
+    supabase.storage.from("reports").upload(certificatePdfPath, certificatePdfBuffer, {
+      contentType: "application/pdf",
+      upsert: true,
+    }),
   ]);
 
   const { data: pdfUrl } = supabase.storage
     .from("reports")
     .getPublicUrl(pdfPath);
-  const { data: csvUrl } = supabase.storage
+  const { data: certificatePdfUrl } = supabase.storage
     .from("reports")
-    .getPublicUrl(csvPath);
+    .getPublicUrl(certificatePdfPath);
 
   const timestamp = Date.now();
   const nocachePdfUrl = `${pdfUrl.publicUrl}?v=${timestamp}`;
-  const nocacheCsvUrl = `${csvUrl.publicUrl}?v=${timestamp}`;
+  const nocacheCertificatePdfUrl = `${certificatePdfUrl.publicUrl}?v=${timestamp}`;
+  const dashboardUrl = getStaffDashboardUrl(today);
 
-  // Send to admin via LINE
+  return {
+    summary: {
+      ok: true,
+      date: today,
+      orderCount: orders.length,
+      pdfUrl: nocachePdfUrl,
+      certificatePdfUrl: nocacheCertificatePdfUrl,
+      dashboardUrl,
+    },
+    lineMessage: {
+      date: today,
+      totalOrders: orders.length,
+      totalRevenue,
+      items: reportData.items ?? [],
+      orders: reportData.orderNumbers ?? [],
+    },
+  };
+}
+
+async function sendDailySummaryToLine(
+  payload: DailySummaryPayload,
+  customAdminUid?: string,
+) {
   const adminsToSend = customAdminUid ? [customAdminUid] : env.ADMIN_LINE_UID;
-  if (adminsToSend && adminsToSend.length > 0) {
-    for (const adminId of adminsToSend) {
-      try {
-        await sendDailySummaryToAdmin(
-          adminId,
-          {
-            date: today,
-            totalOrders: orders.length,
-            totalRevenue: totalRevenue,
-            items: reportData.items,
-            orders: reportData.orderNumbers,
-          },
-          nocachePdfUrl,
-          nocacheCsvUrl,
-        );
-      } catch (e) {
-        console.error("Failed to send daily summary via LINE to admin %s:", adminId, e);
-      }
+
+  if (!adminsToSend || adminsToSend.length === 0) {
+    return payload.summary;
+  }
+
+  for (const adminId of adminsToSend) {
+    try {
+      await sendDailySummaryToAdmin(
+        adminId,
+        payload.lineMessage,
+        payload.summary.pdfUrl,
+        payload.summary.certificatePdfUrl,
+        payload.summary.dashboardUrl,
+      );
+    } catch (e) {
+      console.error("Failed to send daily summary via LINE to admin %s:", adminId, e);
     }
   }
 
-  return { ok: true, date: today, orderCount: orders.length };
+  return payload.summary;
+}
+
+export async function generateDailySummary(targetDateStr?: string): Promise<DailySummaryResult> {
+  const payload = await buildDailySummary(targetDateStr);
+  return payload.summary;
+}
+
+export async function generateAndSendDailySummary(targetDateStr?: string, customAdminUid?: string) {
+  const payload = await buildDailySummary(targetDateStr);
+  return await sendDailySummaryToLine(payload, customAdminUid);
 }
