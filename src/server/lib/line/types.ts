@@ -1,8 +1,17 @@
 // ─── LINE Shop API Response Types ────────────────────────────────────────────
 
+export const LINE_SHOP_ORDER_STATUSES = [
+  "FINALIZED",
+  "COMPLETED",
+  "EXPIRED",
+  "CANCELED",
+] as const;
+
+export type LineShopOrderStatus = (typeof LINE_SHOP_ORDER_STATUSES)[number];
+
 export interface LineShopOrder {
   orderNo: string;
-  status: "FINALIZED" | "COMPLETED" | "EXPIRED" | "CANCELED";
+  status: LineShopOrderStatus;
   paymentStatus: string;
   paymentMethod: string;
   customerName: string;

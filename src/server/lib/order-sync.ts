@@ -1,5 +1,6 @@
 import { supabaseClient } from "~/server/db/supabase";
 import { listOrders } from "~/server/lib/line/shop-client";
+import { LINE_SHOP_ORDER_STATUSES } from "~/server/lib/line/types";
 
 /**
  * Sync orders from LINE Shop API into the database.
@@ -13,7 +14,7 @@ export async function syncOrdersForDate(targetDate?: string): Promise<number> {
 
   while (true) {
     const response = await listOrders({
-      status: ["READY_TO_SHIP", "SHIPPED", "FINALIZED", "COMPLETED", "EXPIRED", "CANCELED"],
+      status: LINE_SHOP_ORDER_STATUSES,
       page,
       perPage: 50,
       includeItems: true,
