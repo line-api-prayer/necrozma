@@ -4,13 +4,21 @@ import { LINE_SHOP_ORDER_STATUSES } from "../line/types";
 
 const mocks = vi.hoisted(() => ({
   listOrdersMock: vi.fn(),
+  sendServiceRequestPromptMock: vi.fn().mockResolvedValue(false),
   deleteEqMock: vi.fn().mockResolvedValue({ error: null }),
   insertMock: vi.fn().mockResolvedValue({ error: null }),
   orderItemsDeleteMock: vi.fn(),
   ordersUpsertMock: vi.fn(),
   upsertSelectMock: vi.fn(),
   upsertSingleMock: vi.fn().mockResolvedValue({
-    data: { id: "order-1" },
+    data: {
+      id: "order-1",
+      line_order_no: "LINE-001",
+      customer_line_uid: null,
+      requested_service_date: null,
+      prayer_text: null,
+      service_request_prompt_sent_at: null,
+    },
     error: null,
   }),
 }));
@@ -21,6 +29,10 @@ mocks.ordersUpsertMock.mockImplementation(() => ({ select: mocks.upsertSelectMoc
 
 vi.mock("~/server/lib/line/shop-client", () => ({
   listOrders: mocks.listOrdersMock,
+}));
+
+vi.mock("~/server/lib/line/messaging-client", () => ({
+  sendServiceRequestPrompt: mocks.sendServiceRequestPromptMock,
 }));
 
 vi.mock("~/server/db/supabase", () => ({
@@ -36,6 +48,7 @@ vi.mock("~/server/db/supabase", () => ({
 describe("syncOrdersForDate", () => {
   beforeEach(() => {
     mocks.listOrdersMock.mockReset();
+    mocks.sendServiceRequestPromptMock.mockClear();
     mocks.deleteEqMock.mockClear();
     mocks.insertMock.mockClear();
     mocks.orderItemsDeleteMock.mockClear();

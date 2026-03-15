@@ -154,6 +154,31 @@ export default function OrderDetailPage() {
           </div>
 
           <div className={styles.fieldGroup}>
+            <span className={styles.fieldLabel}>วันดำเนินงาน</span>
+            <div className={styles.fieldValue}>
+              {order.requestedServiceDate
+                ? new Date(order.requestedServiceDate).toLocaleDateString("th-TH", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "ลูกค้ายังไม่ได้กรอก"}
+            </div>
+          </div>
+
+          <div className={styles.fieldGroup}>
+            <span className={styles.fieldLabel}>คำขอพร</span>
+            <div className={styles.fieldValue}>
+              {(() => {
+                const prayerText = order.prayerText?.trim();
+                return prayerText && prayerText.length > 0
+                  ? prayerText
+                  : "ลูกค้ายังไม่ได้กรอก";
+              })()}
+            </div>
+          </div>
+
+          <div className={styles.fieldGroup}>
             <span className={styles.fieldLabel}>เลขที่คำสั่งซื้อ</span>
             <div className={styles.fieldValue}>{order.lineOrderNo}</div>
           </div>

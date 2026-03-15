@@ -7,8 +7,8 @@ import PdfPrinter from "pdfmake/js/Printer.js";
 // @ts-expect-error - pdfmake/js/qrEnc lacks a declaration file
 import qrEncoder from "pdfmake/js/qrEnc.js";
 import { type OrderWithItems } from "~/server/lib/line/types";
-import { env } from "~/env.js";
 import { supabaseClient } from "~/server/db/supabase";
+import { getOrderDetailUrl } from "~/server/lib/app-links";
 
 export interface ReportSummaryItem {
   name: string;
@@ -73,7 +73,7 @@ interface QrEncoderModule {
 }
 
 type PdfPrinterInstance = {
-  createPdfKitDocument: (docDefinition: unknown) => PdfKitDocument;
+  createPdfKitDocument: (docDefinition: unknown) => Promise<PdfKitDocument>;
 };
 
 type PdfPrinterConstructor = new (
@@ -150,21 +150,6 @@ function getPdfMakeFonts() {
     Roboto: fontFiles,
     THSarabunNew: fontFiles,
   };
-}
-
-function getAppBaseUrl() {
-  return (
-    env.BETTER_AUTH_URL ??
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000")
-  );
-}
-
-function getOrderDetailUrl(lineOrderNo: string) {
-  return `${getAppBaseUrl()}/staff/order/${lineOrderNo}`;
 }
 
 async function loadProductNameMap() {
@@ -419,7 +404,9 @@ function summarizePackage(order: OrderWithItems, getDisplayName: (name: string) 
 
 function buildDetailText(order: OrderWithItems) {
   const details: string[] = [];
-  if (stripText(order.remarkBuyer ?? "").length > 0) {
+  if (stripText(order.prayerText ?? "").length > 0) {
+    details.push(stripText(order.prayerText ?? ""));
+  } else if (stripText(order.remarkBuyer ?? "").length > 0) {
     details.push(stripText(order.remarkBuyer ?? ""));
   }
 
@@ -580,7 +567,7 @@ export async function generatePdfBuffer(data: ReportData): Promise<Buffer> {
     },
   };
 
-  const doc = printer.createPdfKitDocument(docDefinition);
+  const doc = await printer.createPdfKitDocument(docDefinition);
   return new Promise((resolve, reject) => {
     try {
       const chunks: Buffer[] = [];
@@ -659,7 +646,7 @@ export async function generateCertificatePdfBuffer(data: ReportData): Promise<Bu
       place: "-",
       packageText: "-",
       orderNo: "-",
-      qrUrl: getAppBaseUrl(),
+      qrUrl: getOrderDetailUrl("-"),
     });
   } else {
     data.orders.forEach((order) => {

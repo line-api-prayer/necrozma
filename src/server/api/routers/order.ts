@@ -12,6 +12,27 @@ import {
 } from "~/server/lib/line/types";
 import { syncOrdersForDate } from "~/server/lib/order-sync";
 
+async function attachOrderRelations(supabase: Awaited<ReturnType<typeof supabaseClient>>, orders: ReturnType<typeof toOrder>[]) {
+  const orderIds = orders.map((o) => o.id);
+  if (orderIds.length === 0) {
+    return [];
+  }
+
+  const [itemsResult, evidenceResult] = await Promise.all([
+    supabase.from("order_items").select("*").in("order_id", orderIds),
+    supabase.from("evidence").select("*").in("order_id", orderIds),
+  ]);
+
+  const items = ((itemsResult.data ?? []) as OrderItemRow[]).map(toOrderItem);
+  const evidence = ((evidenceResult.data ?? []) as EvidenceRow[]).map(toEvidence);
+
+  return orders.map((order) => ({
+    ...order,
+    items: items.filter((item) => item.orderId === order.id),
+    evidence: evidence.filter((item) => item.orderId === order.id),
+  }));
+}
+
 export const orderRouter = createTRPCRouter({
   list: staffProcedure
     .input(
@@ -27,11 +48,11 @@ export const orderRouter = createTRPCRouter({
       let query = supabase
         .from("orders")
         .select("*")
-        .order("order_date", { ascending: false })
+        .order("requested_service_date", { ascending: true })
         .order("created_at", { ascending: false });
 
       if (input.date) {
-        query = query.eq("order_date", input.date);
+        query = query.eq("requested_service_date", input.date);
       }
       if (input.status) {
         query = query.eq("internal_status", input.status);
@@ -46,24 +67,23 @@ export const orderRouter = createTRPCRouter({
       if (error) throw new Error(error.message);
 
       const orders = (data as OrderRow[]).map(toOrder);
+      return await attachOrderRelations(supabase, orders);
+    }),
 
-      // Fetch items and evidence for each order
-      const orderIds = orders.map((o) => o.id);
-      if (orderIds.length === 0) return [];
+  listMissingServiceRequests: staffProcedure
+    .query(async () => {
+      const supabase = await supabaseClient();
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .is("service_request_completed_at", null)
+        .or("requested_service_date.is.null,prayer_text.is.null")
+        .order("created_at", { ascending: false });
 
-      const [itemsResult, evidenceResult] = await Promise.all([
-        supabase.from("order_items").select("*").in("order_id", orderIds),
-        supabase.from("evidence").select("*").in("order_id", orderIds),
-      ]);
+      if (error) throw new Error(error.message);
 
-      const items = ((itemsResult.data ?? []) as OrderItemRow[]).map(toOrderItem);
-      const evidence = ((evidenceResult.data ?? []) as EvidenceRow[]).map(toEvidence);
-
-      return orders.map((order) => ({
-        ...order,
-        items: items.filter((i) => i.orderId === order.id),
-        evidence: evidence.filter((e) => e.orderId === order.id),
-      }));
+      const orders = (data as OrderRow[]).map(toOrder);
+      return await attachOrderRelations(supabase, orders);
     }),
 
   getByOrderNo: staffProcedure
@@ -105,11 +125,18 @@ export const orderRouter = createTRPCRouter({
       const { data, error } = await supabase
         .from("orders")
         .select("internal_status, total_price")
-        .eq("order_date", input.date);
+        .eq("requested_service_date", input.date);
 
       if (error) throw new Error(error.message);
 
       const orders = data as { internal_status: string; total_price: number }[];
+      const { count: missingCount, error: missingError } = await supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .is("service_request_completed_at", null)
+        .or("requested_service_date.is.null,prayer_text.is.null");
+
+      if (missingError) throw new Error(missingError.message);
 
       return {
         date: input.date,
@@ -118,6 +145,7 @@ export const orderRouter = createTRPCRouter({
         pendingCount: orders.filter((o) => o.internal_status === "PENDING").length,
         uploadedCount: orders.filter((o) => o.internal_status === "UPLOADED").length,
         completedCount: orders.filter((o) => o.internal_status === "COMPLETED").length,
+        missingServiceRequestCount: missingCount ?? 0,
       };
     }),
 });

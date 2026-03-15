@@ -122,9 +122,9 @@ export default function Admin() {
           <div className={styles.pageHeader}>
             <div>
               <h1 className={styles.pageTitle}>
-                สรุปออเดอร์ / รายการออเดอร์
+                งานตามวันดำเนินงาน
               </h1>
-              <p className={styles.pageSubtitle}>ภาพรวมการตรวจสอบงาน</p>
+              <p className={styles.pageSubtitle}>ติดตามออเดอร์ตามวันที่ลูกค้านัดดำเนินการ</p>
             </div>
             <div className={styles.dateFilter}>
               <DailySummaryButton date={selectedDate} />

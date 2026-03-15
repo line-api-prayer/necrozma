@@ -9,7 +9,9 @@ export function DailySummaryButton({ date }: { date: string }) {
   const handleGenerate = async () => {
     try {
       const result = await generateMutation.mutateAsync({ date });
-      alert(`รายงานสร้างเรียบร้อย!\nPDF: ${result.pdfUrl}\nCSV: ${result.csvUrl}`);
+      alert(
+        `รายงานสร้างเรียบร้อย!\nสรุปออเดอร์: ${result.pdfUrl}\nCertificate: ${result.certificatePdfUrl}\nแดชบอร์ดพนักงาน: ${result.dashboardUrl}`,
+      );
     } catch (e) {
       alert(`เกิดข้อผิดพลาด: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
