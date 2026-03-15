@@ -1,5 +1,7 @@
 import { messagingApi } from "@line/bot-sdk";
 import { env } from "~/env.js";
+import { formatThaiLongDate, formatThaiShortDate } from "~/server/lib/operations-date";
+import { buildServiceRequestUrl } from "~/server/lib/service-request";
 
 const isTestMode = env.ENABLE_TEST_MODE === "true";
 
@@ -83,51 +85,9 @@ export async function sendDailySummaryToAdmin(
     orders: string[];
   },
   pdfUrl: string,
-  csvUrl: string,
+  certificatePdfUrl: string,
+  dashboardUrl: string,
 ) {
-  const dateStr = new Date(stats.date).toLocaleDateString("th-TH", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  });
-
-  let messageText = `💰 สรุปรายการออเดอร์ ประจำวันที่ ${dateStr}\n`;
-  messageText += `ร้านค้า: ฝากใส่บาตร\n\n`;
-  messageText += `━━━━━━━━━━━━━━\n\n`;
-  
-  messageText += `📊 สรุปวันนี้\n`;
-  messageText += `• จำนวนออเดอร์: ${stats.totalOrders} ออเดอร์\n`;
-  messageText += `• ยอดรวมทั้งหมด: ${stats.totalRevenue.toLocaleString()} บาท\n\n`;
-  messageText += `━━━━━━━━━━━━━━\n\n`;
-
-  messageText += `📦 รายการที่ขายได้\n`;
-  if (stats.items.length > 0) {
-    stats.items.forEach((item) => {
-      // The user's template simplifies names up to the first ' ' if they are long, but to be safe let's just use the item.name
-      // Alternatively, we can just print the exact mapping. The user said: "• ใส่บาตร ชุด S ร่ำรวย 2 ชุด = 198 บาท"
-      messageText += `• ${item.name} ${item.qty} ชุด = ${item.total} บาท\n`;
-    });
-  } else {
-    messageText += `• ไม่มีรายการ\n`;
-  }
-  messageText += `\n━━━━━━━━━━━━━━\n\n`;
-
-  messageText += `🧾 Order ID\n`;
-  if (stats.orders.length > 0) {
-    stats.orders.forEach(o => {
-      // The user requested short prefixes "80252885" instead of full order trackings in the template. 
-      // E.g string "2026030380252885", taking the last 8 digits.
-      messageText += `${o.slice(-8)}\n`;
-    });
-  } else {
-    messageText += `-\n`;
-  }
-  messageText += `\n━━━━━━━━━━━━━━\n\n`;
-
-  messageText += `📎 ไฟล์\n`;
-  messageText += `PDF: ${pdfUrl}\n`;
-  messageText += `CSV: ${csvUrl}`;
-
   const targetUserId =
     isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : adminLineUid;
 
@@ -141,11 +101,212 @@ export async function sendDailySummaryToAdmin(
     to: targetUserId,
     messages: [
       {
-        type: "text",
-        text: messageText,
+        type: "flex",
+        altText: `สรุปรายการออเดอร์สำหรับวันถัดไป ${formatThaiShortDate(stats.date)}: ${stats.totalOrders} ออเดอร์`,
+        contents: createDailySummaryFlexMessage(stats, pdfUrl, certificatePdfUrl, dashboardUrl),
       },
     ],
   });
+}
+
+function createDailySummaryFlexMessage(
+  stats: {
+    date: string;
+    totalOrders: number;
+    totalRevenue: number;
+    items: { name: string; qty: number; total: number }[];
+    orders: string[];
+  },
+  pdfUrl: string,
+  certificatePdfUrl: string,
+  dashboardUrl: string,
+): messagingApi.FlexBubble {
+  const itemLines =
+    stats.items.length > 0
+      ? stats.items.slice(0, 6).map((item) => `• ${item.name} ${item.qty} ชุด = ${item.total.toLocaleString()} บาท`)
+      : ["• ไม่มีรายการ"];
+  const orderLines =
+    stats.orders.length > 0
+      ? stats.orders.slice(0, 8).map((orderNo) => orderNo.slice(-8))
+      : ["-"];
+  const hiddenItemCount = Math.max(0, stats.items.length - itemLines.length);
+  const hiddenOrderCount = Math.max(0, stats.orders.length - orderLines.length);
+
+  return {
+    type: "bubble",
+    size: "mega",
+    header: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: "#14532d",
+      paddingAll: "lg",
+      contents: [
+        {
+          type: "text",
+          text: "สรุปรายการออเดอร์ล่วงหน้า",
+          color: "#bbf7d0",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: formatThaiLongDate(stats.date),
+          color: "#ffffff",
+          size: "xl",
+          weight: "bold",
+          margin: "sm",
+          wrap: true,
+        },
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        summaryText(`💰 สรุปรายการออเดอร์สำหรับวันถัดไป ${formatThaiShortDate(stats.date)}`, "md", true),
+        summaryText("ร้านค้า: ฝากใส่บาตร", "sm", false, "#4b5563"),
+        { type: "separator", margin: "sm" },
+        summaryText("📊 สรุปงานวันถัดไป", "sm", true),
+        summaryText(`• วันดำเนินงาน: ${formatThaiLongDate(stats.date)}`, "sm"),
+        summaryText(`• จำนวนออเดอร์: ${stats.totalOrders} ออเดอร์`, "sm"),
+        summaryText(`• ยอดรวมทั้งหมด: ${stats.totalRevenue.toLocaleString()} บาท`, "sm"),
+        { type: "separator", margin: "sm" },
+        summaryText("📦 รายการที่ขายได้", "sm", true),
+        ...itemLines.map((line) => summaryText(line, "sm")),
+        ...(hiddenItemCount > 0
+          ? [summaryText(`และอีก ${hiddenItemCount} รายการ`, "xs", false, "#6b7280")]
+          : []),
+        { type: "separator", margin: "sm" },
+        summaryText("🧾 Order ID", "sm", true),
+        ...orderLines.map((line) => summaryText(line, "sm")),
+        ...(hiddenOrderCount > 0
+          ? [summaryText(`และอีก ${hiddenOrderCount} ออเดอร์`, "xs", false, "#6b7280")]
+          : []),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        linkButton("ใบสรุปออเดอร์", pdfUrl, "#111827"),
+        linkButton("ใบประกาศ / Certificate", certificatePdfUrl, "#374151"),
+        linkButton("แดชบอร์ดพนักงาน", dashboardUrl, "#06c755"),
+      ],
+    },
+  };
+}
+
+function summaryText(
+  text: string,
+  size: "xs" | "sm" | "md",
+  bold = false,
+  color = "#111827",
+): messagingApi.FlexText {
+  return {
+    type: "text",
+    text,
+    size,
+    color,
+    weight: bold ? "bold" : "regular",
+    wrap: true,
+  };
+}
+
+function linkButton(label: string, uri: string, color: string): messagingApi.FlexButton {
+  return {
+    type: "button",
+    style: "primary",
+    color,
+    action: {
+      type: "uri",
+      label,
+      uri,
+    },
+    height: "sm",
+  };
+}
+
+export async function sendServiceRequestPrompt(
+  lineUid: string | null,
+  order: { lineOrderNo: string; customerName: string },
+) {
+  const targetUserId =
+    isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
+
+  if (!targetUserId) {
+    return false;
+  }
+
+  if (isTestMode && env.DEV_TEST_USER_ID && lineUid) {
+    console.warn(
+      `[TEST MODE] Redirecting service request prompt from ${lineUid} to ${targetUserId}`,
+    );
+  }
+
+  const formUrl = buildServiceRequestUrl(order.lineOrderNo);
+
+  await client.pushMessage({
+    to: targetUserId,
+    messages: [
+      {
+        type: "flex",
+        altText: `กรอกวันดำเนินงานสำหรับคำสั่งซื้อ ${order.lineOrderNo}`,
+        contents: {
+          type: "bubble",
+          size: "mega",
+          header: {
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#7c2d12",
+            paddingAll: "lg",
+            contents: [
+              {
+                type: "text",
+                text: "ยืนยันวันดำเนินงาน",
+                size: "lg",
+                weight: "bold",
+                color: "#fff7ed",
+              },
+            ],
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            spacing: "md",
+            contents: [
+              {
+                type: "text",
+                text: `${order.customerName || "ลูกค้า"} รบกวนแจ้งวันดำเนินงานและคำขอพรสำหรับคำสั่งซื้อนี้ด้วยนะคะ`,
+                wrap: true,
+                size: "sm",
+                color: "#374151",
+              },
+              {
+                type: "text",
+                text: `Order No: ${order.lineOrderNo}`,
+                wrap: true,
+                size: "sm",
+                color: "#111827",
+                weight: "bold",
+              },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            spacing: "sm",
+            contents: [
+              linkButton("แจ้งข้อมูลตอนนี้", formUrl, "#ea580c"),
+            ],
+          },
+        },
+      },
+    ],
+  });
+
+  return true;
 }
 
 function createApprovalFlexMessage(

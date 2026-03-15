@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "~/env.js";
 import { generateAndSendDailySummary } from "~/server/lib/daily-summary";
+import { getNextThailandDateString } from "~/server/lib/operations-date";
 import { syncOrdersForDate } from "~/server/lib/order-sync";
 
 export async function GET(request: NextRequest) {
@@ -18,13 +19,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const targetDate = getNextThailandDateString();
+
     // 3. Perform a sync first to ensure data is up to date (Required for Hobby Plan once-a-day limit)
     console.log("[CRON Daily Summary] Starting pre-summary sync...");
     const syncedCount = await syncOrdersForDate();
     console.log(`[CRON Daily Summary] Sync completed: ${syncedCount} orders processed`);
 
     // 4. Generate and send the summary
-    const result = await generateAndSendDailySummary();
+    const result = await generateAndSendDailySummary(targetDate);
     console.log(`[CRON Daily Summary] Success: Sent report for ${result.date} with ${result.orderCount} orders to ${env.ADMIN_LINE_UID.length} admins`);
     
     return NextResponse.json({

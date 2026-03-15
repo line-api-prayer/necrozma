@@ -76,6 +76,22 @@
   display: block;
 }
 
+.dateCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.serviceDate {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.secondaryDate {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
 .refNo {
   font-size: 0.75rem;
   color: #9ca3af;
@@ -106,6 +122,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.prayerText {
+  margin: 0;
+  max-width: 260px;
+  color: #4b5563;
+  line-height: 1.5;
 }
 
 .actionButton {

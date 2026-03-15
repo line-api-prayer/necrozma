@@ -84,6 +84,81 @@
   color: #22c55e;
 }
 
+.summaryValueAmber {
+  composes: summaryValue;
+  color: #d97706;
+}
+
+.missingCard {
+  background: linear-gradient(135deg, #fff7ed, #fffbeb);
+  border: 1px solid #fdba74;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.missingHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.missingTitle {
+  margin: 0;
+  font-size: 1rem;
+  color: #9a3412;
+}
+
+.missingSubtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.875rem;
+  color: #9a3412;
+}
+
+.missingList {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.missingItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 10px;
+  padding: 0.875rem 1rem;
+}
+
+.missingOrderNo {
+  margin: 0;
+  font-weight: 700;
+  color: #7c2d12;
+}
+
+.missingCustomer {
+  margin: 0.25rem 0 0;
+  color: #9a3412;
+}
+
+.missingMeta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.missingMeta span {
+  background: #ffffff;
+  border: 1px solid #fed7aa;
+  border-radius: 9999px;
+  color: #9a3412;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+}
+
 .tableCard {
   background: white;
   border-radius: 12px;
@@ -160,6 +235,22 @@
   color: #1f2937;
 }
 
+.dateCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.primaryDate {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.secondaryDate {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
 .refNo {
   font-size: 0.75rem;
   color: #9ca3af;
@@ -197,6 +288,13 @@
   color: #9ca3af;
 }
 
+.prayerText {
+  margin: 0;
+  max-width: 280px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
 .empty {
   padding: 3rem;
   text-align: center;
@@ -211,5 +309,14 @@
   .table {
     display: block;
     overflow-x: auto;
+  }
+
+  .missingItem {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .missingMeta {
+    justify-content: flex-start;
   }
 }

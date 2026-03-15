@@ -1,24 +1,30 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "~/trpc/react";
 import { getSupabaseBrowserClient } from "~/lib/supabase-browser";
 import { Badge } from "~/app/_components/badge";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import styles from "./page.module.css";
 
-export default function StaffPage() {
+function StaffPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const today = new Date().toISOString().split("T")[0]!;
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedDate, setSelectedDate] = useState(searchParams.get("date") ?? today);
   const [search, setSearch] = useState("");
 
   const ordersQuery = api.order.list.useQuery({ date: selectedDate || undefined });
+  const missingOrdersQuery = api.order.listMissingServiceRequests.useQuery();
   const mappingsQuery = api.mapping.list.useQuery();
   const allOrders = useMemo(
     () => (ordersQuery.data ?? []) as OrderWithItems[],
     [ordersQuery.data],
+  );
+  const missingOrders = useMemo(
+    () => (missingOrdersQuery.data ?? []) as OrderWithItems[],
+    [missingOrdersQuery.data],
   );
 
   const getDisplayName = (originalName: string) => {
@@ -59,6 +65,11 @@ export default function StaffPage() {
   }, [orders, selectedDate]);
 
   useEffect(() => {
+    const nextDate = searchParams.get("date") ?? today;
+    setSelectedDate(nextDate);
+  }, [searchParams, today]);
+
+  useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     const channel = supabase
       .channel("staff-orders")
@@ -72,6 +83,7 @@ export default function StaffPage() {
             payload.new.internal_status === "COMPLETED"
           ) {
             void ordersQuery.refetch();
+            void missingOrdersQuery.refetch();
           }
         },
       )
@@ -80,7 +92,7 @@ export default function StaffPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [ordersQuery]);
+  }, [missingOrdersQuery, ordersQuery]);
 
   return (
     <div className={styles.container}>
@@ -88,7 +100,7 @@ export default function StaffPage() {
         <div>
           <h1 className={styles.title}>รายการงานประจำวัน</h1>
           <p className={styles.subtitle}>
-            เลือกวันที่เพื่อดูรายการย้อนหลัง
+            โฟกัสที่วันดำเนินงานและคำขอพรของลูกค้า
           </p>
         </div>
         <div className={styles.dateWrap}>
@@ -125,8 +137,37 @@ export default function StaffPage() {
             <p className={styles.summaryLabel}>จำนวนออเดอร์</p>
             <p className={styles.summaryValueGreen}>{summary.total}</p>
           </div>
+          <div>
+            <p className={styles.summaryLabel}>ข้อมูลยังไม่ครบ</p>
+            <p className={styles.summaryValueAmber}>{missingOrders.length}</p>
+          </div>
         </div>
       </div>
+
+      {missingOrders.length > 0 && (
+        <div className={styles.missingCard}>
+          <div className={styles.missingHeader}>
+            <div>
+              <h3 className={styles.missingTitle}>ออเดอร์ที่ยังรอวันดำเนินงานหรือคำขอพร</h3>
+              <p className={styles.missingSubtitle}>ติดตามลูกค้าให้กรอกข้อมูลก่อนเข้าคิวงาน</p>
+            </div>
+          </div>
+          <div className={styles.missingList}>
+            {missingOrders.map((order) => (
+              <div key={order.id} className={styles.missingItem}>
+                <div>
+                  <p className={styles.missingOrderNo}>{order.lineOrderNo}</p>
+                  <p className={styles.missingCustomer}>{order.customerName}</p>
+                </div>
+                <div className={styles.missingMeta}>
+                  <span>{order.requestedServiceDate ? "มีวันนัดแล้ว" : "ยังไม่มีวันนัด"}</span>
+                  <span>{order.prayerText?.trim() ? "มีคำขอพร" : "ยังไม่มีคำขอพร"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={styles.tableCard}>
         <div className={styles.tableHeader}>
@@ -148,10 +189,11 @@ export default function StaffPage() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>วันที่</th>
+                <th>วันดำเนินงาน</th>
                 <th>เลขที่คำสั่งซื้อ</th>
                 <th>ลูกค้า</th>
                 <th>แพ็กเกจ</th>
+                <th>คำขอพร</th>
                 <th>ยอดเงิน</th>
                 <th>สถานะ</th>
                 <th>ดำเนินการ</th>
@@ -168,10 +210,22 @@ export default function StaffPage() {
                     className={isRejected ? styles.rejectedRow : undefined}
                   >
                     <td>
-                      {new Date(order.orderDate).toLocaleDateString("th-TH", {
-                        day: "2-digit",
-                        month: "2-digit",
-                      })}
+                      <div className={styles.dateCell}>
+                        <div className={styles.primaryDate}>
+                          {order.requestedServiceDate
+                            ? new Date(order.requestedServiceDate).toLocaleDateString("th-TH", {
+                                day: "2-digit",
+                                month: "2-digit",
+                              })
+                            : "รอลูกค้ากรอก"}
+                        </div>
+                        <div className={styles.secondaryDate}>
+                          สั่งซื้อ {new Date(order.orderDate).toLocaleDateString("th-TH", {
+                            day: "2-digit",
+                            month: "2-digit",
+                          })}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <div className={styles.orderNo}>
@@ -188,6 +242,18 @@ export default function StaffPage() {
                           </div>
                         </>
                       )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const prayerText = order.prayerText?.trim();
+                        return (
+                          <p className={styles.prayerText}>
+                            {prayerText && prayerText.length > 0
+                              ? prayerText
+                              : "รอลูกค้ากรอกคำขอพร"}
+                          </p>
+                        );
+                      })()}
                     </td>
                     <td>฿{Number(order.totalPrice).toLocaleString()}</td>
                     <td>
@@ -236,5 +302,13 @@ export default function StaffPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function StaffPage() {
+  return (
+    <Suspense fallback={<div className={styles.empty}>กำลังโหลด...</div>}>
+      <StaffPageContent />
+    </Suspense>
   );
 }

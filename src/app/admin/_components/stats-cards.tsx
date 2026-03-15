@@ -42,6 +42,10 @@ export function StatsCards({ summary }: { summary: DailySummary }) {
           </svg>
         </div>
       </div>
+      <div className={styles.card}>
+        <p className={styles.label}>รอข้อมูลลูกค้า</p>
+        <p className={styles.value}>{summary.missingServiceRequestCount}</p>
+      </div>
     </div>
   );
 }
