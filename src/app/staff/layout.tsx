@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "~/server/lib/auth-client";
-import { NotificationBell } from "~/app/_components/notification-bell";
+import { NotificationBell } from "~/components/notification-bell";
 import styles from "./layout.module.css";
 
 export default function StaffLayout({

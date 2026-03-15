@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "~/trpc/react";
 import { getSupabaseBrowserClient } from "~/lib/supabase-browser";
-import { Badge } from "~/app/_components/badge";
+import { Badge } from "~/components/badge";
 import { type OrderWithItems } from "~/server/lib/line/types";
 import styles from "./page.module.css";
 

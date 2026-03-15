@@ -12,7 +12,7 @@ import { OrderTable } from "./_components/order-table";
 import { ProofReviewModal } from "./_components/proof-review-modal";
 import { LineSuccessModal } from "./_components/line-success-modal";
 import { DailySummaryButton } from "./_components/daily-summary-button";
-import { NotificationBell } from "~/app/_components/notification-bell";
+import { NotificationBell } from "~/components/notification-bell";
 import styles from "./admin.module.css";
 
 export default function Admin() {

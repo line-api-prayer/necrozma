@@ -588,7 +588,12 @@ export async function generateCertificatePdfBuffer(data: ReportData): Promise<Bu
   const normalFontBytes = new Uint8Array(fs.readFileSync(getFontFiles().normal));
   const boldFontBytes = new Uint8Array(fs.readFileSync(getFontFiles().bold));
   const templateBytes = new Uint8Array(
-    fs.readFileSync(path.resolve(process.cwd(), "SaibahtOnline-Template.png")),
+    fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "src/server/lib/report-assets/SaibahtOnline-Template.png",
+      ),
+    ),
   );
   const nameMap = await loadProductNameMap();
   const getDisplayName = createDisplayNameResolver(nameMap);

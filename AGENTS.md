@@ -96,6 +96,7 @@ LINE integration conventions:
 - **Styling:** CSS Modules plus `src/styles/globals.css`.
 - **Serialization:** SuperJSON is the tRPC transformer.
 - **OpenAPI:** Route handlers may carry `@openapi` JSDoc annotations; preserve them when changing documented endpoints.
+- **Shared UI placement:** Keep globally shared components outside `src/app/` (for example `src/components/`) and reserve private `_components` folders for route-local UI.
 
 ## Testing
 
@@ -104,6 +105,7 @@ Testing is present, but split across tools:
 - **Vitest** is configured for unit-style tests.
 - **Playwright** is installed and there is at least one E2E spec in `e2e/login.spec.ts`.
 - `scripts/` and `prototype/` are excluded from `tsconfig.json`; keep one-off utilities out of the main TypeScript build unless they are intended to be typechecked.
+- Diagnostic and ad hoc utility scripts live under `scripts/diagnostics/`; generated script outputs should stay under `scripts/diagnostics/output/` instead of the repo root.
 
 ## Environment Variables
 
@@ -144,7 +146,7 @@ Client variables:
 - When adding a new tRPC router, register it in `src/server/api/root.ts`.
 - When adding new env vars, update both `.env.example` and `src/env.js`.
 - When changing auth or webhook behavior, verify interactions across Better Auth, LINE bot credentials, and test mode.
-- When changing reporting or PDF flows, check `src/server/lib/report-generator.ts` and any related assets/scripts in the repo root.
+- When changing reporting or PDF flows, check `src/server/lib/report-generator.ts`, the tracked certificate template in `src/server/lib/report-assets/`, and any related diagnostic scripts.
 - Be careful with uncommitted user changes in files like `package.json`, `tsconfig.json`, or lockfiles; this repo is actively being modified.
 
 ## Ongoing Workflow Notes
