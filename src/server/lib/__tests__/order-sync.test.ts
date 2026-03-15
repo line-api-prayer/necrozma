@@ -14,13 +14,16 @@ const mocks = vi.hoisted(() => ({
     data: {
       id: "order-1",
       line_order_no: "LINE-001",
-      customer_line_uid: null,
+      customer_line_uid: "U-customer-1",
       requested_service_date: null,
       prayer_text: null,
       service_request_prompt_sent_at: null,
     },
     error: null,
   }),
+  env: {
+    ENABLE_SERVICE_REQUEST_PROMPTS: "false",
+  },
 }));
 
 mocks.orderItemsDeleteMock.mockImplementation(() => ({ eq: mocks.deleteEqMock }));
@@ -38,11 +41,22 @@ vi.mock("~/server/lib/line/messaging-client", () => ({
 vi.mock("~/server/db/supabase", () => ({
   supabaseClient: vi.fn().mockResolvedValue({
     from: vi.fn((table: string) => {
-      if (table === "orders") return { upsert: mocks.ordersUpsertMock };
+      if (table === "orders") {
+        return {
+          upsert: mocks.ordersUpsertMock,
+          update: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ error: null }),
+          })),
+        };
+      }
       if (table === "order_items") return { delete: mocks.orderItemsDeleteMock, insert: mocks.insertMock };
       throw new Error(`Unexpected table ${table}`);
     }),
   }),
+}));
+
+vi.mock("~/env.js", () => ({
+  env: mocks.env,
 }));
 
 describe("syncOrdersForDate", () => {
@@ -55,6 +69,7 @@ describe("syncOrdersForDate", () => {
     mocks.ordersUpsertMock.mockClear();
     mocks.upsertSelectMock.mockClear();
     mocks.upsertSingleMock.mockClear();
+    mocks.env.ENABLE_SERVICE_REQUEST_PROMPTS = "false";
   });
 
   it("requests only LINE-supported order statuses", async () => {
@@ -72,6 +87,65 @@ describe("syncOrdersForDate", () => {
       page: 1,
       perPage: 50,
       includeItems: true,
+    });
+  });
+
+  it("does not send service request prompts while the kill switch is off", async () => {
+    mocks.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: "LINE-001",
+          status: "FINALIZED",
+          paymentStatus: "PAID",
+          paymentMethod: "CARD",
+          customerName: "Jane Doe",
+          checkoutAt: "2026-03-16T09:00:00.000Z",
+          subtotalPrice: 100,
+          shipmentPrice: 0,
+          discountAmount: 0,
+          totalPrice: 100,
+          remarkBuyer: null,
+          items: [],
+        },
+      ],
+      totalCount: 1,
+      hasMore: false,
+    });
+
+    await syncOrdersForDate();
+
+    expect(mocks.sendServiceRequestPromptMock).not.toHaveBeenCalled();
+  });
+
+  it("sends service request prompts when the kill switch is on", async () => {
+    mocks.env.ENABLE_SERVICE_REQUEST_PROMPTS = "true";
+    mocks.sendServiceRequestPromptMock.mockResolvedValue(true);
+    mocks.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: "LINE-001",
+          status: "FINALIZED",
+          paymentStatus: "PAID",
+          paymentMethod: "CARD",
+          customerName: "Jane Doe",
+          checkoutAt: "2026-03-16T09:00:00.000Z",
+          subtotalPrice: 100,
+          shipmentPrice: 0,
+          discountAmount: 0,
+          totalPrice: 100,
+          remarkBuyer: null,
+          items: [],
+        },
+      ],
+      totalCount: 1,
+      hasMore: false,
+    });
+
+    await syncOrdersForDate();
+
+    expect(mocks.sendServiceRequestPromptMock).toHaveBeenCalledWith("U-customer-1", {
+      lineOrderNo: "LINE-001",
+      customerName: "Jane Doe",
     });
   });
 });

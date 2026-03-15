@@ -127,6 +127,7 @@ Core server variables currently include:
 - `LINE_CUSTOMER_TEST_BOT_CHANNEL_ACCESS_TOKEN` (optional)
 - `LINE_CUSTOMER_TEST_BOT_CHANNEL_SECRET` (optional)
 - `ENABLE_TEST_MODE`
+- `ENABLE_SERVICE_REQUEST_PROMPTS`
 - `DEV_TEST_USER_ID`
 - `ADMIN_LINE_UID`
 - `CRON_SECRET`
@@ -153,6 +154,7 @@ Client variables:
 - Daily summary, staff views, and service-request flows now depend on `orders.requested_service_date`, `orders.prayer_text`, `orders.service_request_prompt_sent_at`, and `orders.service_request_completed_at`. Apply the corresponding Supabase migration before testing those flows.
 - For the service-request rollout, historical orders before the customer bot launch were marked as completed in the prompt flow. Missing-service-request queries should ignore rows where `service_request_completed_at` is already set.
 - Customer bot deep links depend on `BETTER_AUTH_URL` being a live public URL. Stale ngrok domains will break LINE links even if the token itself is valid.
+- Automatic customer service-request prompts are now gated behind `ENABLE_SERVICE_REQUEST_PROMPTS=true`. Leave it `false` until the real customer rollout/test window.
 - When a Next.js page uses `useSearchParams()`, isolate it behind a `Suspense` boundary or read `searchParams` in the server page and pass the value down. `bun run build` will fail otherwise.
 - `bun run build` may fail in a network-restricted sandbox when `next/font` needs to fetch Google font metadata. Rerun with network access for verification, or replace remote fonts with local ones if offline builds become a requirement.
 - Before committing, run `bun run build` and verify the linked Vercel project still deploys successfully after the push.

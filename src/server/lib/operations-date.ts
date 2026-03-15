@@ -23,6 +23,7 @@ export function formatThaiLongDate(date: string) {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: THAILAND_TIMEZONE,
   });
 }
 
@@ -31,5 +32,6 @@ export function formatThaiShortDate(date: string) {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",
+    timeZone: THAILAND_TIMEZONE,
   });
 }
