@@ -160,3 +160,4 @@ Client variables:
 - When a Next.js page uses `useSearchParams()`, isolate it behind a `Suspense` boundary or read `searchParams` in the server page and pass the value down. `bun run build` will fail otherwise.
 - `bun run build` may fail in a network-restricted sandbox when `next/font` needs to fetch Google font metadata. Rerun with network access for verification, or replace remote fonts with local ones if offline builds become a requirement.
 - Before committing, run `bun run build` and verify the linked Vercel project still deploys successfully after the push.
+- Vitest now loads `src/test/setup.ts`, which hard-fails any unexpected global `fetch` call. Keep external API coverage mocked in unit tests so LINE, Supabase, and other network services are never triggered during `bun run test`.

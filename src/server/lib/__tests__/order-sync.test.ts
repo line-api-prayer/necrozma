@@ -1,34 +1,62 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { syncOrdersForDate } from "../order-sync";
 import { LINE_SHOP_ORDER_STATUSES } from "../line/types";
+import { syncOrdersForDate } from "../order-sync";
 
 const mocks = vi.hoisted(() => ({
   listOrdersMock: vi.fn(),
   sendServiceRequestPromptMock: vi.fn().mockResolvedValue(false),
-  deleteEqMock: vi.fn().mockResolvedValue({ error: null }),
-  insertMock: vi.fn().mockResolvedValue({ error: null }),
+  ordersUpdateEqMock: vi.fn().mockResolvedValue({ error: null }),
+  ordersUpdateMock: vi.fn(),
+  orderItemsDeleteEqMock: vi.fn().mockResolvedValue({ error: null }),
   orderItemsDeleteMock: vi.fn(),
+  orderItemsInsertMock: vi.fn().mockResolvedValue({ error: null }),
+  ordersUpsertSingleMock: vi.fn(),
+  ordersUpsertSelectMock: vi.fn(),
   ordersUpsertMock: vi.fn(),
-  upsertSelectMock: vi.fn(),
-  upsertSingleMock: vi.fn().mockResolvedValue({
-    data: {
-      id: "order-1",
-      line_order_no: "LINE-001",
-      customer_line_uid: "U-customer-1",
-      requested_service_date: null,
-      prayer_text: null,
-      service_request_prompt_sent_at: null,
-    },
-    error: null,
-  }),
+  supabaseFromMock: vi.fn(),
   env: {
     ENABLE_SERVICE_REQUEST_PROMPTS: "false",
   },
 }));
 
-mocks.orderItemsDeleteMock.mockImplementation(() => ({ eq: mocks.deleteEqMock }));
-mocks.upsertSelectMock.mockImplementation(() => ({ single: mocks.upsertSingleMock }));
-mocks.ordersUpsertMock.mockImplementation(() => ({ select: mocks.upsertSelectMock }));
+const upsertedOrder = {
+  id: "order-1",
+  line_order_no: "LINE-001",
+  customer_line_uid: "U-customer-1",
+  requested_service_date: null,
+  prayer_text: null,
+  service_request_prompt_sent_at: null,
+};
+
+mocks.ordersUpdateMock.mockImplementation(() => ({
+  eq: mocks.ordersUpdateEqMock,
+}));
+mocks.orderItemsDeleteMock.mockImplementation(() => ({
+  eq: mocks.orderItemsDeleteEqMock,
+}));
+mocks.ordersUpsertSelectMock.mockImplementation(() => ({
+  single: mocks.ordersUpsertSingleMock,
+}));
+mocks.ordersUpsertMock.mockImplementation(() => ({
+  select: mocks.ordersUpsertSelectMock,
+}));
+mocks.supabaseFromMock.mockImplementation((table: string) => {
+  if (table === "orders") {
+    return {
+      upsert: mocks.ordersUpsertMock,
+      update: mocks.ordersUpdateMock,
+    };
+  }
+
+  if (table === "order_items") {
+    return {
+      delete: mocks.orderItemsDeleteMock,
+      insert: mocks.orderItemsInsertMock,
+    };
+  }
+
+  throw new Error(`Unexpected table ${table}`);
+});
 
 vi.mock("~/server/lib/line/shop-client", () => ({
   listOrders: mocks.listOrdersMock,
@@ -40,18 +68,7 @@ vi.mock("~/server/lib/line/messaging-client", () => ({
 
 vi.mock("~/server/db/supabase", () => ({
   supabaseClient: vi.fn().mockResolvedValue({
-    from: vi.fn((table: string) => {
-      if (table === "orders") {
-        return {
-          upsert: mocks.ordersUpsertMock,
-          update: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          })),
-        };
-      }
-      if (table === "order_items") return { delete: mocks.orderItemsDeleteMock, insert: mocks.insertMock };
-      throw new Error(`Unexpected table ${table}`);
-    }),
+    from: mocks.supabaseFromMock,
   }),
 }));
 
@@ -62,13 +79,19 @@ vi.mock("~/env.js", () => ({
 describe("syncOrdersForDate", () => {
   beforeEach(() => {
     mocks.listOrdersMock.mockReset();
-    mocks.sendServiceRequestPromptMock.mockClear();
-    mocks.deleteEqMock.mockClear();
-    mocks.insertMock.mockClear();
-    mocks.orderItemsDeleteMock.mockClear();
-    mocks.ordersUpsertMock.mockClear();
-    mocks.upsertSelectMock.mockClear();
-    mocks.upsertSingleMock.mockClear();
+    mocks.sendServiceRequestPromptMock.mockReset();
+    mocks.sendServiceRequestPromptMock.mockResolvedValue(false);
+    mocks.ordersUpdateEqMock.mockReset();
+    mocks.ordersUpdateEqMock.mockResolvedValue({ error: null });
+    mocks.orderItemsDeleteEqMock.mockReset();
+    mocks.orderItemsDeleteEqMock.mockResolvedValue({ error: null });
+    mocks.orderItemsInsertMock.mockReset();
+    mocks.orderItemsInsertMock.mockResolvedValue({ error: null });
+    mocks.ordersUpsertSingleMock.mockReset();
+    mocks.ordersUpsertSingleMock.mockResolvedValue({
+      data: upsertedOrder,
+      error: null,
+    });
     mocks.env.ENABLE_SERVICE_REQUEST_PROMPTS = "false";
   });
 
@@ -147,5 +170,88 @@ describe("syncOrdersForDate", () => {
       lineOrderNo: "LINE-001",
       customerName: "Jane Doe",
     });
+    expect(mocks.ordersUpdateEqMock).toHaveBeenCalled();
+  });
+
+  it("falls back safely when checkoutAt is invalid", async () => {
+    mocks.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: "LINE-001",
+          status: "FINALIZED",
+          paymentStatus: "PAID",
+          paymentMethod: "CARD",
+          customerName: "Jane Doe",
+          checkoutAt: "not-a-date",
+          subtotalPrice: 100,
+          shipmentPrice: 0,
+          discountAmount: 0,
+          totalPrice: 100,
+          remarkBuyer: null,
+          items: [],
+        },
+      ],
+      totalCount: 1,
+      hasMore: false,
+    });
+
+    await expect(syncOrdersForDate()).resolves.toBe(1);
+  });
+
+  it("skips an order when deleting stale items fails", async () => {
+    mocks.orderItemsDeleteEqMock.mockResolvedValue({
+      error: { message: "delete failed" },
+    });
+    mocks.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: "LINE-001",
+          status: "FINALIZED",
+          paymentStatus: "PAID",
+          paymentMethod: "CARD",
+          customerName: "Jane Doe",
+          checkoutAt: "2026-03-16T09:00:00.000Z",
+          subtotalPrice: 100,
+          shipmentPrice: 0,
+          discountAmount: 0,
+          totalPrice: 100,
+          remarkBuyer: null,
+          items: [{ sku: null, barcode: null, name: "ชุด", price: 100, discountedPrice: null, quantity: 1, imageUrl: null, variants: null }],
+        },
+      ],
+      totalCount: 1,
+      hasMore: false,
+    });
+
+    await expect(syncOrdersForDate()).resolves.toBe(0);
+    expect(mocks.orderItemsInsertMock).not.toHaveBeenCalled();
+  });
+
+  it("continues when inserting refreshed items fails", async () => {
+    mocks.orderItemsInsertMock.mockResolvedValue({
+      error: { message: "insert failed" },
+    });
+    mocks.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: "LINE-001",
+          status: "FINALIZED",
+          paymentStatus: "PAID",
+          paymentMethod: "CARD",
+          customerName: "Jane Doe",
+          checkoutAt: "2026-03-16T09:00:00.000Z",
+          subtotalPrice: 100,
+          shipmentPrice: 0,
+          discountAmount: 0,
+          totalPrice: 100,
+          remarkBuyer: null,
+          items: [{ sku: null, barcode: null, name: "ชุด", price: 100, discountedPrice: null, quantity: 1, imageUrl: null, variants: null }],
+        },
+      ],
+      totalCount: 1,
+      hasMore: false,
+    });
+
+    await expect(syncOrdersForDate()).resolves.toBe(0);
   });
 });

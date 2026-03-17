@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { validateSignature, type WebhookEvent } from "@line/bot-sdk";
 import { env } from "~/env.js";
+import { createLogger, serializeError } from "~/server/lib/logger";
 import { handleWebhookEvents } from "~/server/lib/line/webhook-handler";
+
+const logger = createLogger("line-webhook-route");
 
 /**
  * @openapi
@@ -60,12 +63,23 @@ import { handleWebhookEvents } from "~/server/lib/line/webhook-handler";
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const botType = (searchParams.get("type") as "admin" | "customer") ?? "customer";
+    const requestedType = searchParams.get("type");
+    const botType = requestedType === "admin" || requestedType === "customer" || requestedType === null
+      ? (requestedType ?? "customer")
+      : null;
+
+    if (!botType) {
+      logger.warn("line_webhook.invalid_bot_type", {
+        requestedType,
+      });
+      return NextResponse.json({ error: "Invalid bot type" }, { status: 400 });
+    }
 
     const textBody = await request.text();
     const signature = request.headers.get("x-line-signature");
 
     if (!signature) {
+      logger.warn("line_webhook.missing_signature", { botType });
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
 
@@ -80,27 +94,43 @@ export async function POST(request: NextRequest) {
     }
 
     if (!channelSecret) {
-      console.error(`[LINE ${botType}] Webhook called but channel secret is not configured.`);
+      logger.error("line_webhook.channel_secret_missing", { botType });
       return NextResponse.json({ error: "Bot channel secret not configured" }, { status: 500 });
     }
 
     // Use the official LINE bot SDK validateSignature method
     if (!validateSignature(textBody, channelSecret, signature)) {
-      console.error(`[LINE ${botType}] Signature verification failed.`);
+      logger.warn("line_webhook.signature_invalid", { botType });
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    const parsed = JSON.parse(textBody) as { events: WebhookEvent[] };
-    console.log(`[LINE Webhook] Processing ${parsed.events.length} events for bot: ${botType}`);
+    let parsed: { events: WebhookEvent[] };
+    try {
+      parsed = JSON.parse(textBody) as { events: WebhookEvent[] };
+    } catch (error) {
+      logger.warn("line_webhook.invalid_json", {
+        botType,
+        error: serializeError(error),
+      });
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    if (!Array.isArray(parsed.events)) {
+      logger.warn("line_webhook.invalid_events_payload", { botType });
+      return NextResponse.json({ error: "Invalid events payload" }, { status: 400 });
+    }
+
+    logger.info("line_webhook.events.received", {
+      botType,
+      eventCount: parsed.events.length,
+    });
     await handleWebhookEvents(parsed.events, botType);
 
     return NextResponse.json({ ok: true });
-    } catch (error) {
-    console.error("[LINE Webhook Error]", error);
-    if (error instanceof Error) {
-      console.error("Stack trace:", error.stack);
-    }
+  } catch (error) {
+    logger.error("line_webhook.unhandled_error", {
+      error: serializeError(error),
+    });
     return NextResponse.json({ error: "Server Error", details: error instanceof Error ? error.message : String(error) }, { status: 500 });
-    }
-    }
-
+  }
+}

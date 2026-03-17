@@ -1,5 +1,6 @@
 import { messagingApi } from "@line/bot-sdk";
 import { env } from "~/env.js";
+import { createLogger, serializeError } from "~/server/lib/logger";
 import { formatThaiLongDate, formatThaiShortDate } from "~/server/lib/operations-date";
 import { buildServiceRequestUrl } from "~/server/lib/service-request";
 
@@ -16,6 +17,45 @@ export const client = new messagingApi.MessagingApiClient({
 export const adminClient = new messagingApi.MessagingApiClient({
   channelAccessToken: env.LINE_ADMIN_BOT_CHANNEL_ACCESS_TOKEN,
 });
+
+const logger = createLogger("line-messaging");
+
+async function pushMessageWithLogging(
+  clientType: "customer" | "admin",
+  targetUserId: string,
+  messages: messagingApi.Message[],
+  context: Record<string, unknown>,
+) {
+  logger.info("line_messaging.push.started", {
+    clientType,
+    targetUserId,
+    messageCount: messages.length,
+    ...context,
+  });
+
+  try {
+    const selectedClient = clientType === "admin" ? adminClient : client;
+    await selectedClient.pushMessage({
+      to: targetUserId,
+      messages,
+    });
+    logger.info("line_messaging.push.succeeded", {
+      clientType,
+      targetUserId,
+      messageCount: messages.length,
+      ...context,
+    });
+  } catch (error) {
+    logger.error("line_messaging.push.failed", {
+      clientType,
+      targetUserId,
+      messageCount: messages.length,
+      ...context,
+      error: serializeError(error),
+    });
+    throw error;
+  }
+}
 
 export async function sendApprovalNotification(
   lineUid: string,
@@ -39,14 +79,16 @@ export async function sendApprovalNotification(
     isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
 
   if (isTestMode && env.DEV_TEST_USER_ID) {
-    console.warn(
-      `[TEST MODE] Redirecting approval message from ${lineUid} to ${targetUserId}`,
-    );
+    logger.warn("line_messaging.test_mode_redirect", {
+      notificationType: "approval",
+      fromLineUid: lineUid,
+      toLineUid: targetUserId,
+    });
   }
 
-  await client.pushMessage({
-    to: targetUserId,
-    messages,
+  await pushMessageWithLogging("customer", targetUserId, messages, {
+    notificationType: "approval",
+    orderNo: order.lineOrderNo,
   });
 }
 
@@ -59,19 +101,21 @@ export async function sendRejectionNotification(
     isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
 
   if (isTestMode && env.DEV_TEST_USER_ID) {
-    console.warn(
-      `[TEST MODE] Redirecting rejection message from ${lineUid} to ${targetUserId}`,
-    );
+    logger.warn("line_messaging.test_mode_redirect", {
+      notificationType: "rejection",
+      fromLineUid: lineUid,
+      toLineUid: targetUserId,
+    });
   }
 
-  await client.pushMessage({
-    to: targetUserId,
-    messages: [
-      {
-        type: "text",
-        text: `แจ้งเตือน: คำสั่งซื้อ ${order.lineOrderNo}\n\nหลักฐานการดำเนินการถูกส่งกลับแก้ไข\nเหตุผล: ${reason}\n\nกรุณาติดต่อเจ้าหน้าที่เพื่อดำเนินการใหม่`,
-      },
-    ],
+  await pushMessageWithLogging("customer", targetUserId, [
+    {
+      type: "text",
+      text: `แจ้งเตือน: คำสั่งซื้อ ${order.lineOrderNo}\n\nหลักฐานการดำเนินการถูกส่งกลับแก้ไข\nเหตุผล: ${reason}\n\nกรุณาติดต่อเจ้าหน้าที่เพื่อดำเนินการใหม่`,
+    },
+  ], {
+    notificationType: "rejection",
+    orderNo: order.lineOrderNo,
   });
 }
 
@@ -92,20 +136,24 @@ export async function sendDailySummaryToAdmin(
     isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : adminLineUid;
 
   if (isTestMode && env.DEV_TEST_USER_ID) {
-    console.warn(
-      `[TEST MODE] Redirecting daily summary from admin ${adminLineUid} to ${targetUserId}`,
-    );
+    logger.warn("line_messaging.test_mode_redirect", {
+      notificationType: "daily_summary",
+      fromLineUid: adminLineUid,
+      toLineUid: targetUserId,
+      date: stats.date,
+    });
   }
 
-  await adminClient.pushMessage({
-    to: targetUserId,
-    messages: [
-      {
-        type: "flex",
-        altText: `สรุปรายการออเดอร์สำหรับวันถัดไป ${formatThaiShortDate(stats.date)}: ${stats.totalOrders} ออเดอร์`,
-        contents: createDailySummaryFlexMessage(stats, pdfUrl, certificatePdfUrl, dashboardUrl),
-      },
-    ],
+  await pushMessageWithLogging("admin", targetUserId, [
+    {
+      type: "flex",
+      altText: `สรุปรายการออเดอร์สำหรับวันถัดไป ${formatThaiShortDate(stats.date)}: ${stats.totalOrders} ออเดอร์`,
+      contents: createDailySummaryFlexMessage(stats, pdfUrl, certificatePdfUrl, dashboardUrl),
+    },
+  ], {
+    notificationType: "daily_summary",
+    date: stats.date,
+    totalOrders: stats.totalOrders,
   });
 }
 
@@ -236,74 +284,81 @@ export async function sendServiceRequestPrompt(
     isTestMode && env.DEV_TEST_USER_ID ? env.DEV_TEST_USER_ID : lineUid;
 
   if (!targetUserId) {
+    logger.warn("line_messaging.service_request.skipped_missing_target", {
+      orderNo: order.lineOrderNo,
+      hasLineUid: Boolean(lineUid),
+    });
     return false;
   }
 
   if (isTestMode && env.DEV_TEST_USER_ID && lineUid) {
-    console.warn(
-      `[TEST MODE] Redirecting service request prompt from ${lineUid} to ${targetUserId}`,
-    );
+    logger.warn("line_messaging.test_mode_redirect", {
+      notificationType: "service_request",
+      fromLineUid: lineUid,
+      toLineUid: targetUserId,
+      orderNo: order.lineOrderNo,
+    });
   }
 
   const formUrl = buildServiceRequestUrl(order.lineOrderNo);
 
-  await client.pushMessage({
-    to: targetUserId,
-    messages: [
-      {
-        type: "flex",
-        altText: `กรอกวันดำเนินงานสำหรับคำสั่งซื้อ ${order.lineOrderNo}`,
-        contents: {
-          type: "bubble",
-          size: "mega",
-          header: {
-            type: "box",
-            layout: "vertical",
-            backgroundColor: "#7c2d12",
-            paddingAll: "lg",
-            contents: [
-              {
-                type: "text",
-                text: "ยืนยันวันดำเนินงาน",
-                size: "lg",
-                weight: "bold",
-                color: "#fff7ed",
-              },
-            ],
-          },
-          body: {
-            type: "box",
-            layout: "vertical",
-            spacing: "md",
-            contents: [
-              {
-                type: "text",
-                text: `${order.customerName || "ลูกค้า"} รบกวนแจ้งวันดำเนินงานและคำขอพรสำหรับคำสั่งซื้อนี้ด้วยนะคะ`,
-                wrap: true,
-                size: "sm",
-                color: "#374151",
-              },
-              {
-                type: "text",
-                text: `Order No: ${order.lineOrderNo}`,
-                wrap: true,
-                size: "sm",
-                color: "#111827",
-                weight: "bold",
-              },
-            ],
-          },
-          footer: {
-            type: "box",
-            layout: "vertical",
-            spacing: "sm",
-            contents: [
-              linkButton("แจ้งข้อมูลตอนนี้", formUrl, "#ea580c"),
-            ],
-          },
+  await pushMessageWithLogging("customer", targetUserId, [
+    {
+      type: "flex",
+      altText: `กรอกวันดำเนินงานสำหรับคำสั่งซื้อ ${order.lineOrderNo}`,
+      contents: {
+        type: "bubble",
+        size: "mega",
+        header: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#7c2d12",
+          paddingAll: "lg",
+          contents: [
+            {
+              type: "text",
+              text: "ยืนยันวันดำเนินงาน",
+              size: "lg",
+              weight: "bold",
+              color: "#fff7ed",
+            },
+          ],
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          spacing: "md",
+          contents: [
+            {
+              type: "text",
+              text: `${order.customerName || "ลูกค้า"} รบกวนแจ้งวันดำเนินงานและคำขอพรสำหรับคำสั่งซื้อนี้ด้วยนะคะ`,
+              wrap: true,
+              size: "sm",
+              color: "#374151",
+            },
+            {
+              type: "text",
+              text: `Order No: ${order.lineOrderNo}`,
+              wrap: true,
+              size: "sm",
+              color: "#111827",
+              weight: "bold",
+            },
+          ],
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            linkButton("แจ้งข้อมูลตอนนี้", formUrl, "#ea580c"),
+          ],
         },
       },
-    ],
+    },
+  ], {
+    notificationType: "service_request",
+    orderNo: order.lineOrderNo,
   });
 
   return true;

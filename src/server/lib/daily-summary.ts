@@ -1,5 +1,6 @@
 import { env } from "~/env.js";
 import { supabaseClient } from "~/server/db/supabase";
+import { createLogger, serializeError } from "~/server/lib/logger";
 import {
   type ReportData,
   generatePdfBuffer,
@@ -17,6 +18,8 @@ import {
   toOrderItem,
   toEvidence,
 } from "~/server/lib/line/types";
+
+const logger = createLogger("daily-summary");
 
 type DailySummaryResult = {
   ok: true;
@@ -42,6 +45,9 @@ async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPa
   const supabase = await supabaseClient();
 
   const today = targetDateStr ?? getThailandDateString();
+  logger.info("daily_summary.build.started", {
+    targetDate: today,
+  });
 
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
@@ -50,6 +56,10 @@ async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPa
     .order("created_at", { ascending: false });
 
   if (ordersError) {
+    logger.error("daily_summary.orders.fetch_failed", {
+      targetDate: today,
+      error: serializeError(ordersError),
+    });
     throw new Error(ordersError.message);
   }
 
@@ -64,7 +74,15 @@ async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPa
     original_name: string;
     display_name: string;
   }
-  const { data: mappingData } = await supabase.from("product_mappings").select("original_name, display_name");
+  const { data: mappingData, error: mappingError } = await supabase
+    .from("product_mappings")
+    .select("original_name, display_name");
+  if (mappingError) {
+    logger.warn("daily_summary.product_mappings.fetch_failed", {
+      targetDate: today,
+      error: serializeError(mappingError),
+    });
+  }
   const typedMappingData = (mappingData ?? []) as ProductMappingRow[];
   const nameMap = new Map<string, string>();
   typedMappingData.forEach(m => nameMap.set(m.original_name, m.display_name));
@@ -75,6 +93,24 @@ async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPa
       supabase.from("order_items").select("*").in("order_id", orderIds),
       supabase.from("evidence").select("*").in("order_id", orderIds),
     ]);
+
+    if (itemsResult.error) {
+      logger.error("daily_summary.order_items.fetch_failed", {
+        targetDate: today,
+        orderCount: orderIds.length,
+        error: serializeError(itemsResult.error),
+      });
+      throw new Error(itemsResult.error.message);
+    }
+
+    if (evidenceResult.error) {
+      logger.error("daily_summary.evidence.fetch_failed", {
+        targetDate: today,
+        orderCount: orderIds.length,
+        error: serializeError(evidenceResult.error),
+      });
+      throw new Error(evidenceResult.error.message);
+    }
 
     const items = ((itemsResult.data ?? []) as OrderItemRow[]).map(toOrderItem);
     const evidence = ((evidenceResult.data ?? []) as EvidenceRow[]).map(toEvidence);
@@ -122,7 +158,7 @@ async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPa
   const pdfPath = `${today}/daily-summary-${today}.pdf`;
   const certificatePdfPath = `${today}/daily-certificates-${today}.pdf`;
 
-  await Promise.all([
+  const [pdfUploadResult, certificateUploadResult] = await Promise.all([
     supabase.storage.from("reports").upload(pdfPath, pdfBuffer, {
       contentType: "application/pdf",
       upsert: true,
@@ -132,6 +168,24 @@ async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPa
       upsert: true,
     }),
   ]);
+
+  if (pdfUploadResult.error) {
+    logger.error("daily_summary.upload_failed", {
+      targetDate: today,
+      fileType: "summary",
+      error: serializeError(pdfUploadResult.error),
+    });
+    throw new Error(pdfUploadResult.error.message);
+  }
+
+  if (certificateUploadResult.error) {
+    logger.error("daily_summary.upload_failed", {
+      targetDate: today,
+      fileType: "certificate",
+      error: serializeError(certificateUploadResult.error),
+    });
+    throw new Error(certificateUploadResult.error.message);
+  }
 
   const { data: pdfUrl } = supabase.storage
     .from("reports")
@@ -144,6 +198,12 @@ async function buildDailySummary(targetDateStr?: string): Promise<DailySummaryPa
   const nocachePdfUrl = `${pdfUrl.publicUrl}?v=${timestamp}`;
   const nocacheCertificatePdfUrl = `${certificatePdfUrl.publicUrl}?v=${timestamp}`;
   const dashboardUrl = getStaffDashboardUrl(today);
+
+  logger.info("daily_summary.build.completed", {
+    targetDate: today,
+    orderCount: orders.length,
+    totalRevenue,
+  });
 
   return {
     summary: {
@@ -171,6 +231,9 @@ async function sendDailySummaryToLine(
   const adminsToSend = customAdminUid ? [customAdminUid] : env.ADMIN_LINE_UID;
 
   if (!adminsToSend || adminsToSend.length === 0) {
+    logger.warn("daily_summary.line_send.skipped_missing_admins", {
+      targetDate: payload.summary.date,
+    });
     return payload.summary;
   }
 
@@ -183,8 +246,16 @@ async function sendDailySummaryToLine(
         payload.summary.certificatePdfUrl,
         payload.summary.dashboardUrl,
       );
+      logger.info("daily_summary.line_send.succeeded", {
+        targetDate: payload.summary.date,
+        adminId,
+      });
     } catch (e) {
-      console.error("Failed to send daily summary via LINE to admin %s:", adminId, e);
+      logger.error("daily_summary.line_send.failed", {
+        targetDate: payload.summary.date,
+        adminId,
+        error: serializeError(e),
+      });
     }
   }
 
