@@ -1,4 +1,5 @@
 import { env } from "~/env.js";
+import { createLogger, serializeError } from "~/server/lib/logger";
 import {
   type LineShopOrder,
   type LineShopOrderItem,
@@ -7,8 +8,13 @@ import {
 } from "./types";
 
 const BASE_URL = "https://developers-oaplus.line.biz/myshop/v1";
+const logger = createLogger("line-shop");
 
 async function lineShopFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = init?.method ?? "GET";
+  const startedAt = Date.now();
+  logger.info("line_shop.request.started", { method, path });
+
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
@@ -20,6 +26,12 @@ async function lineShopFetch<T>(path: string, init?: RequestInit): Promise<T> {
       },
     });
   } catch (err) {
+    logger.error("line_shop.request.network_error", {
+      method,
+      path,
+      durationMs: Date.now() - startedAt,
+      error: serializeError(err),
+    });
     const cause = err instanceof Error ? (err.cause ?? err.message) : String(err);
     const causeStr = typeof cause === "string" ? cause : JSON.stringify(cause);
     throw new Error(`LINE Shop API unreachable (${path}): ${causeStr}`);
@@ -27,10 +39,35 @@ async function lineShopFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.text();
+    logger.error("line_shop.request.http_error", {
+      method,
+      path,
+      status: res.status,
+      durationMs: Date.now() - startedAt,
+      responseBody: body,
+    });
     throw new Error(`LINE Shop API error ${res.status}: ${body}`);
   }
 
-  return res.json() as Promise<T>;
+  try {
+    const data = (await res.json()) as T;
+    logger.info("line_shop.request.succeeded", {
+      method,
+      path,
+      status: res.status,
+      durationMs: Date.now() - startedAt,
+    });
+    return data;
+  } catch (error) {
+    logger.error("line_shop.request.invalid_json", {
+      method,
+      path,
+      status: res.status,
+      durationMs: Date.now() - startedAt,
+      error: serializeError(error),
+    });
+    throw new Error(`LINE Shop API returned invalid JSON (${path})`);
+  }
 }
 
 // ─── Raw API response shapes (snake_case from LINE) ────────────────────────
@@ -117,6 +154,12 @@ export async function listOrders(params?: {
   perPage?: number;
   includeItems?: boolean;
 }): Promise<LineShopListResponse> {
+  logger.info("line_shop.list_orders.started", {
+    page: params?.page ?? 1,
+    perPage: params?.perPage ?? 50,
+    includeItems: params?.includeItems ?? false,
+    orderStatuses: params?.status ? (Array.isArray(params.status) ? params.status : [params.status]) : [],
+  });
   const searchParams = new URLSearchParams();
   
   const status = params?.status;
@@ -146,7 +189,10 @@ export async function listOrders(params?: {
           const detailedOrder = await getOrder(order.orderNo);
           return detailedOrder;
         } catch (error) {
-          console.error(`Failed to fetch details for order ${order.orderNo}`, error);
+          logger.warn("line_shop.order_details.fetch_failed", {
+            orderNo: order.orderNo,
+            error: serializeError(error),
+          });
           return order;
         }
       })
@@ -155,11 +201,20 @@ export async function listOrders(params?: {
 
   const hasMore = raw.currentPage < raw.totalPage;
 
-  return {
+  const result = {
     orders,
     totalCount: raw.totalRow ?? 0,
     hasMore,
   };
+
+  logger.info("line_shop.list_orders.completed", {
+    page: params?.page ?? 1,
+    orderCount: result.orders.length,
+    totalCount: result.totalCount,
+    hasMore: result.hasMore,
+  });
+
+  return result;
 }
 
 export async function getOrder(orderNo: string): Promise<LineShopOrder> {

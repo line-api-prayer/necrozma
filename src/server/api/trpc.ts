@@ -11,6 +11,9 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 
 import { auth } from "~/server/lib/auth";
+import { createLogger, serializeError } from "~/server/lib/logger";
+
+const logger = createLogger("trpc");
 
 /**
  * 1. CONTEXT
@@ -89,9 +92,20 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
   }
 
   const result = await next();
+  const durationMs = Date.now() - start;
 
-  const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+  if (result.ok) {
+    logger.info("trpc.procedure.completed", {
+      path,
+      durationMs,
+    });
+  } else {
+    logger.error("trpc.procedure.failed", {
+      path,
+      durationMs,
+      error: serializeError(result.error),
+    });
+  }
 
   return result;
 });

@@ -26,6 +26,11 @@ describe("service-request", () => {
     expect(verifyServiceRequestToken("ORDER-999", token)).toBe(false);
   });
 
+  it("rejects malformed tokens without throwing", () => {
+    expect(verifyServiceRequestToken("ORDER-001", "not-a-valid-token")).toBe(false);
+    expect(verifyServiceRequestToken("ORDER-001", "payload.invalid-signature")).toBe(false);
+  });
+
   it("detects whether the service request is complete", () => {
     expect(
       isServiceRequestComplete({

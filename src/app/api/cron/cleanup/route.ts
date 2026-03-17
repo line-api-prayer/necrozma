@@ -1,11 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { env } from "~/env.js";
 import { supabaseClient } from "~/server/db/supabase";
+import { createLogger, serializeError } from "~/server/lib/logger";
+
+const logger = createLogger("cron-cleanup");
 
 export async function GET(request: NextRequest) {
   // 1. Validate authorization
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+    logger.warn("cron.cleanup.unauthorized", {
+      hasAuthorizationHeader: Boolean(authHeader),
+    });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -24,10 +30,17 @@ export async function GET(request: NextRequest) {
       .lte("created_at", cutoffDateIso);
 
     if (fetchError) {
+      logger.error("cron.cleanup.fetch_old_evidence_failed", {
+        cutoffDateIso,
+        error: serializeError(fetchError),
+      });
       throw fetchError;
     }
 
     if (!oldEvidence || oldEvidence.length === 0) {
+      logger.info("cron.cleanup.no_old_evidence", {
+        cutoffDateIso,
+      });
       return NextResponse.json({ message: "No old evidence found", deletedCount: 0 });
     }
 
@@ -42,7 +55,10 @@ export async function GET(request: NextRequest) {
       .remove(pathsToDelete);
 
     if (storageError) {
-      console.error("[CRON Cleanup] Storage deletion error:", storageError);
+      logger.error("cron.cleanup.storage_delete_failed", {
+        deleteCount: pathsToDelete.length,
+        error: serializeError(storageError),
+      });
       // We continue to try to delete DB records even if storage partially fails
     }
 
@@ -53,15 +69,25 @@ export async function GET(request: NextRequest) {
       .in("id", idsToDelete);
 
     if (dbError) {
+      logger.error("cron.cleanup.db_delete_failed", {
+        deleteCount: idsToDelete.length,
+        error: serializeError(dbError),
+      });
       throw dbError;
     }
+
+    logger.info("cron.cleanup.completed", {
+      deletedCount: oldEvidence.length,
+    });
 
     return NextResponse.json({
       message: "Cleanup successful",
       deletedCount: oldEvidence.length,
     });
   } catch (error) {
-    console.error("[CRON Cleanup Error]", error);
+    logger.error("cron.cleanup.failed", {
+      error: serializeError(error),
+    });
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -1,8 +1,11 @@
 import { type WebhookEvent } from "@line/bot-sdk";
 import { supabaseClient } from "~/server/db/supabase";
 import { generateAndSendDailySummary } from "~/server/lib/daily-summary";
+import { createLogger, serializeError, type LogContext } from "~/server/lib/logger";
 import { syncOrdersForDate } from "~/server/lib/order-sync";
 import { adminClient, client } from "~/server/lib/line/messaging-client";
+
+const logger = createLogger("line-webhook-handler");
 
 /**
  * Parse a 6-digit Thai date string (DDMMYY where YY is Buddhist Era)
@@ -10,14 +13,41 @@ import { adminClient, client } from "~/server/lib/line/messaging-client";
  *
  * Example: "060669" → "2026-06-06"
  */
-function parseThaiDate(dateStr: string): string {
+function parseThaiDate(dateStr: string): string | null {
   const dd = dateStr.slice(0, 2);
   const mm = dateStr.slice(2, 4);
   const yy = parseInt(dateStr.slice(4, 6), 10);
   // Convert Thai 2-digit year (e.g. 69) to CE year (e.g. 2026)
   // 2500 + 69 = 2569 (BE). 2569 - 543 = 2026 (CE).
   const ceYear = 2500 + yy - 543;
-  return `${ceYear}-${mm}-${dd}`;
+  const candidate = new Date(`${ceYear}-${mm}-${dd}T00:00:00.000Z`);
+  if (Number.isNaN(candidate.getTime())) {
+    return null;
+  }
+
+  const normalized = candidate.toISOString().split("T")[0];
+  return normalized === `${ceYear}-${mm}-${dd}` ? normalized : null;
+}
+
+async function replyText(
+  replyToken: string,
+  botType: "admin" | "customer",
+  message: string,
+  context: LogContext,
+) {
+  const messagingClient = botType === "admin" ? adminClient : client;
+  try {
+    await messagingClient.replyMessage({
+      replyToken,
+      messages: [{ type: "text", text: message }],
+    });
+    logger.info("line_webhook.reply.succeeded", context);
+  } catch (error) {
+    logger.error("line_webhook.reply.failed", {
+      ...context,
+      error: serializeError(error),
+    });
+  }
 }
 
 /**
@@ -26,7 +56,10 @@ function parseThaiDate(dateStr: string): string {
  */
 async function syncAndSendSummary(targetDate: string | undefined, lineUid: string) {
   const dateToSync = targetDate ?? new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
-  console.log(`[LINE Webhook] Received summary request for user: ${lineUid}, date: ${dateToSync}`);
+  logger.info("line_webhook.summary_request.received", {
+    lineUid,
+    targetDate: dateToSync,
+  });
 
   try {
     const supabase = await supabaseClient();
@@ -38,25 +71,52 @@ async function syncAndSendSummary(targetDate: string | undefined, lineUid: strin
       .eq("order_date", dateToSync);
 
     if (error) {
-      console.error("[LINE Webhook] Error checking existing orders:", error);
+      logger.error("line_webhook.summary_request.order_count_failed", {
+        lineUid,
+        targetDate: dateToSync,
+        error: serializeError(error),
+      });
       // Fallback: try to sync just in case
       await syncOrdersForDate(targetDate);
     } else if (count && count > 0) {
-      console.log(`[LINE Webhook] Found ${count} existing orders for ${dateToSync}. Skipping LINE Shop API sync.`);
+      logger.info("line_webhook.summary_request.reused_existing_orders", {
+        lineUid,
+        targetDate: dateToSync,
+        orderCount: count,
+      });
     } else {
-      console.log(`[LINE Webhook] No existing orders found for ${dateToSync}. Syncing from LINE Shop API...`);
+      logger.info("line_webhook.summary_request.sync_needed", {
+        lineUid,
+        targetDate: dateToSync,
+      });
       const synced = await syncOrdersForDate(targetDate);
-      console.log(`[LINE Webhook] Synced ${synced} orders from LINE Shop.`);
+      logger.info("line_webhook.summary_request.sync_completed", {
+        lineUid,
+        targetDate: dateToSync,
+        syncedCount: synced,
+      });
     }
   } catch (err) {
-    console.error("[LINE Webhook] Failed during sync/check step:", err);
+    logger.error("line_webhook.summary_request.sync_step_failed", {
+      lineUid,
+      targetDate: dateToSync,
+      error: serializeError(err),
+    });
     // Continue to generate summary from whatever is in the DB
   }
 
   await generateAndSendDailySummary(targetDate, lineUid);
+  logger.info("line_webhook.summary_request.completed", {
+    lineUid,
+    targetDate: dateToSync,
+  });
 }
 
 export async function handleWebhookEvents(events: WebhookEvent[], botType: "admin" | "customer" = "admin") {
+  logger.info("line_webhook.events.started", {
+    botType,
+    eventCount: events.length,
+  });
   for (const event of events) {
     try {
       switch (event.type) {
@@ -66,9 +126,18 @@ export async function handleWebhookEvents(events: WebhookEvent[], botType: "admi
         case "message":
           await handleMessage(event, botType);
           break;
+        default:
+          logger.info("line_webhook.event.skipped_unsupported_type", {
+            botType,
+            eventType: event.type,
+          });
       }
     } catch (err) {
-      console.error("Error handling webhook event:", err);
+      logger.error("line_webhook.event.failed", {
+        botType,
+        eventType: event.type,
+        error: serializeError(err),
+      });
     }
   }
 }
@@ -77,22 +146,38 @@ async function handleMessage(event: WebhookEvent & { type: "message" }, botType:
   if (event.message.type !== "text") return;
   const text = event.message.text.trim();
   const lineUid = event.source.userId;
-  if (!lineUid) return;
+  if (!lineUid) {
+    logger.warn("line_webhook.message.skipped_missing_user_id", {
+      botType,
+      text,
+    });
+    return;
+  }
 
   // Simple "my id" command to get user's LINE UID
   if (text.toLowerCase() === "my id" || text.toLowerCase() === "id") {
-    const messagingClient = botType === "admin" ? adminClient : client;
     try {
-      await messagingClient.replyMessage({
-        replyToken: event.replyToken,
-        messages: [{ type: "text", text: `Your LINE User ID is:\n${lineUid}` }],
-      });
-      console.log(`[LINE Webhook] Replied with ID to user: ${lineUid}`);
+      await replyText(
+        event.replyToken,
+        botType,
+        `Your LINE User ID is:\n${lineUid}`,
+        {
+          botType,
+          lineUid,
+          action: "reply_line_id",
+        },
+      );
       return;
     } catch (e) {
-      console.error(`[LINE Webhook] Failed to reply with ID:`, e);
-      // Fallback: log to console at least
-      console.log(`[USER ID RECOVERY] User ID for sender is: ${lineUid}`);
+      logger.error("line_webhook.reply_line_id.failed", {
+        botType,
+        lineUid,
+        error: serializeError(e),
+      });
+      logger.info("line_webhook.reply_line_id.recovery_logged", {
+        botType,
+        lineUid,
+      });
     }
   }
 
@@ -100,28 +185,67 @@ async function handleMessage(event: WebhookEvent & { type: "message" }, botType:
     // "สรุปรายวัน" with optional date argument like "สรุปรายวัน 060669"
     const dateArg = /สรุปรายวัน\s+(\d{6})/.exec(text)?.[1];
     const targetDate = dateArg ? parseThaiDate(dateArg) : undefined;
-    await syncAndSendSummary(targetDate, lineUid);
+    if (dateArg && !targetDate) {
+      logger.warn("line_webhook.summary_request.invalid_date_argument", {
+        botType,
+        lineUid,
+        dateArg,
+      });
+      await replyText(event.replyToken, botType, "รูปแบบวันที่ไม่ถูกต้อง กรุณาใช้ DDMMYY เช่น 060669", {
+        botType,
+        lineUid,
+        action: "invalid_summary_date",
+      });
+      return;
+    }
+    await syncAndSendSummary(targetDate ?? undefined, lineUid);
   } else if (/^\d{6}$/.test(text)) {
     // Bare 6-digit Thai date (e.g. "060669")
     const targetDate = parseThaiDate(text);
-    await syncAndSendSummary(targetDate, lineUid);
+    if (!targetDate) {
+      logger.warn("line_webhook.summary_request.invalid_bare_date", {
+        botType,
+        lineUid,
+        dateArg: text,
+      });
+      await replyText(event.replyToken, botType, "รูปแบบวันที่ไม่ถูกต้อง กรุณาใช้ DDMMYY เช่น 060669", {
+        botType,
+        lineUid,
+        action: "invalid_summary_date",
+      });
+      return;
+    }
+    await syncAndSendSummary(targetDate ?? undefined, lineUid);
   }
 }
 
 async function handleFollow(event: WebhookEvent & { type: "follow" }) {
   const lineUid = event.source.userId;
-  if (!lineUid) return;
+  if (!lineUid) {
+    logger.warn("line_webhook.follow.skipped_missing_user_id");
+    return;
+  }
 
-  console.log(`[LINE Webhook] New follower: ${lineUid}`);
+  logger.info("line_webhook.follow.received", { lineUid });
 
   const supabase = await supabaseClient();
 
   // Upsert into line_customer_map
-  await supabase.from("line_customer_map").upsert(
+  const { error } = await supabase.from("line_customer_map").upsert(
     {
       line_uid: lineUid,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "line_uid" },
   );
+
+  if (error) {
+    logger.error("line_webhook.follow.upsert_failed", {
+      lineUid,
+      error: serializeError(error),
+    });
+    throw new Error(error.message);
+  }
+
+  logger.info("line_webhook.follow.upserted", { lineUid });
 }
