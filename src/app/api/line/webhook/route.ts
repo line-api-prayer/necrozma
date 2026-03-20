@@ -60,7 +60,8 @@ import { handleWebhookEvents } from "~/server/lib/line/webhook-handler";
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const botType = (searchParams.get("type") as "admin" | "customer") ?? "customer";
+    const botType =
+      (searchParams.get("type") as "admin" | "customer") ?? "customer";
 
     const textBody = await request.text();
     const signature = request.headers.get("x-line-signature");
@@ -80,8 +81,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (!channelSecret) {
-      console.error(`[LINE ${botType}] Webhook called but channel secret is not configured.`);
-      return NextResponse.json({ error: "Bot channel secret not configured" }, { status: 500 });
+      console.error(
+        `[LINE ${botType}] Webhook called but channel secret is not configured.`,
+      );
+      return NextResponse.json(
+        { error: "Bot channel secret not configured" },
+        { status: 500 },
+      );
     }
 
     // Use the official LINE bot SDK validateSignature method
@@ -90,17 +96,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    const parsed = JSON.parse(textBody) as { events: WebhookEvent[] };
-    console.log(`[LINE Webhook] Processing ${parsed.events.length} events for bot: ${botType}`);
+    let parsed: { events: WebhookEvent[] };
+    try {
+      parsed = JSON.parse(textBody) as { events: WebhookEvent[] };
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON payload" },
+        { status: 400 },
+      );
+    }
+    console.log(
+      `[LINE Webhook] Processing ${parsed.events.length} events for bot: ${botType}`,
+    );
     await handleWebhookEvents(parsed.events, botType);
 
     return NextResponse.json({ ok: true });
-    } catch (error) {
+  } catch (error) {
     console.error("[LINE Webhook Error]", error);
     if (error instanceof Error) {
       console.error("Stack trace:", error.stack);
     }
-    return NextResponse.json({ error: "Server Error", details: error instanceof Error ? error.message : String(error) }, { status: 500 });
-    }
-    }
-
+    return NextResponse.json(
+      {
+        error: "Server Error",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
+  }
+}

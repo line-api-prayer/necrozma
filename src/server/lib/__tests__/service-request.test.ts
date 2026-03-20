@@ -26,6 +26,28 @@ describe("service-request", () => {
     expect(verifyServiceRequestToken("ORDER-999", token)).toBe(false);
   });
 
+  it("rejects malformed or tampered tokens", () => {
+    const token = createServiceRequestToken("ORDER-001");
+    const [payload, signature] = token.split(".");
+    const tamperedToken = `${payload}.tampered-${signature}`;
+
+    expect(verifyServiceRequestToken("ORDER-001", "not-a-token")).toBe(false);
+    expect(verifyServiceRequestToken("ORDER-001", tamperedToken)).toBe(false);
+  });
+
+  it("rejects expired tokens", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-20T00:00:00.000Z"));
+
+    const token = createServiceRequestToken("ORDER-001");
+
+    vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
+
+    expect(verifyServiceRequestToken("ORDER-001", token)).toBe(false);
+
+    vi.useRealTimers();
+  });
+
   it("detects whether the service request is complete", () => {
     expect(
       isServiceRequestComplete({

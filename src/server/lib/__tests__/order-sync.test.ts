@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   sendServiceRequestPromptMock: vi.fn().mockResolvedValue(false),
   deleteEqMock: vi.fn().mockResolvedValue({ error: null }),
   insertMock: vi.fn().mockResolvedValue({ error: null }),
+  updateEqMock: vi.fn().mockResolvedValue({ error: null }),
+  updateMock: vi.fn(),
   orderItemsDeleteMock: vi.fn(),
   ordersUpsertMock: vi.fn(),
   upsertSelectMock: vi.fn(),
@@ -26,9 +28,16 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-mocks.orderItemsDeleteMock.mockImplementation(() => ({ eq: mocks.deleteEqMock }));
-mocks.upsertSelectMock.mockImplementation(() => ({ single: mocks.upsertSingleMock }));
-mocks.ordersUpsertMock.mockImplementation(() => ({ select: mocks.upsertSelectMock }));
+mocks.orderItemsDeleteMock.mockImplementation(() => ({
+  eq: mocks.deleteEqMock,
+}));
+mocks.upsertSelectMock.mockImplementation(() => ({
+  single: mocks.upsertSingleMock,
+}));
+mocks.ordersUpsertMock.mockImplementation(() => ({
+  select: mocks.upsertSelectMock,
+}));
+mocks.updateMock.mockImplementation(() => ({ eq: mocks.updateEqMock }));
 
 vi.mock("~/server/lib/line/shop-client", () => ({
   listOrders: mocks.listOrdersMock,
@@ -44,12 +53,11 @@ vi.mock("~/server/db/supabase", () => ({
       if (table === "orders") {
         return {
           upsert: mocks.ordersUpsertMock,
-          update: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          })),
+          update: mocks.updateMock,
         };
       }
-      if (table === "order_items") return { delete: mocks.orderItemsDeleteMock, insert: mocks.insertMock };
+      if (table === "order_items")
+        return { delete: mocks.orderItemsDeleteMock, insert: mocks.insertMock };
       throw new Error(`Unexpected table ${table}`);
     }),
   }),
@@ -62,13 +70,40 @@ vi.mock("~/env.js", () => ({
 describe("syncOrdersForDate", () => {
   beforeEach(() => {
     mocks.listOrdersMock.mockReset();
-    mocks.sendServiceRequestPromptMock.mockClear();
-    mocks.deleteEqMock.mockClear();
-    mocks.insertMock.mockClear();
-    mocks.orderItemsDeleteMock.mockClear();
-    mocks.ordersUpsertMock.mockClear();
-    mocks.upsertSelectMock.mockClear();
-    mocks.upsertSingleMock.mockClear();
+    mocks.sendServiceRequestPromptMock.mockReset();
+    mocks.sendServiceRequestPromptMock.mockResolvedValue(false);
+    mocks.deleteEqMock.mockReset();
+    mocks.deleteEqMock.mockResolvedValue({ error: null });
+    mocks.insertMock.mockReset();
+    mocks.insertMock.mockResolvedValue({ error: null });
+    mocks.updateEqMock.mockReset();
+    mocks.updateEqMock.mockResolvedValue({ error: null });
+    mocks.updateMock.mockReset();
+    mocks.updateMock.mockImplementation(() => ({ eq: mocks.updateEqMock }));
+    mocks.orderItemsDeleteMock.mockReset();
+    mocks.orderItemsDeleteMock.mockImplementation(() => ({
+      eq: mocks.deleteEqMock,
+    }));
+    mocks.ordersUpsertMock.mockReset();
+    mocks.ordersUpsertMock.mockImplementation(() => ({
+      select: mocks.upsertSelectMock,
+    }));
+    mocks.upsertSelectMock.mockReset();
+    mocks.upsertSelectMock.mockImplementation(() => ({
+      single: mocks.upsertSingleMock,
+    }));
+    mocks.upsertSingleMock.mockReset();
+    mocks.upsertSingleMock.mockResolvedValue({
+      data: {
+        id: "order-1",
+        line_order_no: "LINE-001",
+        customer_line_uid: "U-customer-1",
+        requested_service_date: null,
+        prayer_text: null,
+        service_request_prompt_sent_at: null,
+      },
+      error: null,
+    });
     mocks.env.ENABLE_SERVICE_REQUEST_PROMPTS = "false";
   });
 
@@ -143,9 +178,87 @@ describe("syncOrdersForDate", () => {
 
     await syncOrdersForDate();
 
-    expect(mocks.sendServiceRequestPromptMock).toHaveBeenCalledWith("U-customer-1", {
-      lineOrderNo: "LINE-001",
-      customerName: "Jane Doe",
+    expect(mocks.sendServiceRequestPromptMock).toHaveBeenCalledWith(
+      "U-customer-1",
+      {
+        lineOrderNo: "LINE-001",
+        customerName: "Jane Doe",
+      },
+    );
+  });
+
+  it("does not send a service request prompt when the order is already complete", async () => {
+    mocks.env.ENABLE_SERVICE_REQUEST_PROMPTS = "true";
+    mocks.upsertSingleMock.mockResolvedValue({
+      data: {
+        id: "order-1",
+        line_order_no: "LINE-001",
+        customer_line_uid: "U-customer-1",
+        requested_service_date: "2026-03-17",
+        prayer_text: "ขอให้ครอบครัวมีความสุข",
+        service_request_prompt_sent_at: null,
+      },
+      error: null,
     });
+    mocks.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: "LINE-001",
+          status: "FINALIZED",
+          paymentStatus: "PAID",
+          paymentMethod: "CARD",
+          customerName: "Jane Doe",
+          checkoutAt: "2026-03-16T09:00:00.000Z",
+          subtotalPrice: 100,
+          shipmentPrice: 0,
+          discountAmount: 0,
+          totalPrice: 100,
+          remarkBuyer: null,
+          items: [],
+        },
+      ],
+      totalCount: 1,
+      hasMore: false,
+    });
+
+    await syncOrdersForDate();
+
+    expect(mocks.sendServiceRequestPromptMock).not.toHaveBeenCalled();
+    expect(mocks.updateMock).not.toHaveBeenCalled();
+  });
+
+  it("records the sent timestamp after a prompt is delivered", async () => {
+    mocks.env.ENABLE_SERVICE_REQUEST_PROMPTS = "true";
+    mocks.sendServiceRequestPromptMock.mockResolvedValue(true);
+    mocks.listOrdersMock.mockResolvedValue({
+      orders: [
+        {
+          orderNo: "LINE-001",
+          status: "FINALIZED",
+          paymentStatus: "PAID",
+          paymentMethod: "CARD",
+          customerName: "Jane Doe",
+          checkoutAt: "2026-03-16T09:00:00.000Z",
+          subtotalPrice: 100,
+          shipmentPrice: 0,
+          discountAmount: 0,
+          totalPrice: 100,
+          remarkBuyer: null,
+          items: [],
+        },
+      ],
+      totalCount: 1,
+      hasMore: false,
+    });
+
+    await syncOrdersForDate();
+
+    const updateArg = mocks.updateMock.mock.calls[0]?.[0] as
+      | {
+          service_request_prompt_sent_at: string;
+        }
+      | undefined;
+    expect(typeof updateArg?.service_request_prompt_sent_at).toBe("string");
+    expect(mocks.updateEqMock).toHaveBeenCalledWith("id", "order-1");
   });
 });

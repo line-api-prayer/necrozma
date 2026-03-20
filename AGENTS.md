@@ -21,6 +21,9 @@ bun run format:check
 bun run format:write
 
 bun run test        # Vitest
+bun run test:unit   # Vitest unit suite under src/server/lib/**/__tests__
+bun run test:integration # Vitest integration-style route/action tests under src/app/**/__tests__
+bun run test:e2e    # Playwright browser suite
 bun run test:watch  # Vitest watch mode
 
 bun run db:migrate  # Run migration script
@@ -102,7 +105,7 @@ LINE integration conventions:
 Testing is present, but split across tools:
 
 - **Vitest** is configured for unit-style tests.
-- **Playwright** is installed and there is at least one E2E spec in `e2e/login.spec.ts`.
+- **Playwright** is installed for local browser E2E coverage.
 - `scripts/` and `prototype/` are excluded from `tsconfig.json`; keep one-off utilities out of the main TypeScript build unless they are intended to be typechecked.
 
 ## Environment Variables
@@ -157,4 +160,6 @@ Client variables:
 - Automatic customer service-request prompts are now gated behind `ENABLE_SERVICE_REQUEST_PROMPTS=true`. Leave it `false` until the real customer rollout/test window.
 - When a Next.js page uses `useSearchParams()`, isolate it behind a `Suspense` boundary or read `searchParams` in the server page and pass the value down. `bun run build` will fail otherwise.
 - `bun run build` may fail in a network-restricted sandbox when `next/font` needs to fetch Google font metadata. Rerun with network access for verification, or replace remote fonts with local ones if offline builds become a requirement.
+- `bun run test:e2e` starts the local Next.js dev server via Playwright. In sandboxed runs, you may need permission to bind `localhost:3000`.
+- The current E2E coverage is intentionally limited to local UI paths and avoids real external auth / LINE API calls; keep that constraint when expanding browser tests.
 - Before committing, run `bun run build` and verify the linked Vercel project still deploys successfully after the push.
